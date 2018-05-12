@@ -20,6 +20,7 @@ module Twitch.Deserialize exposing
   )
 
 import Json.Decode exposing (..)
+import Date exposing (Date)
 
 sampleToken = """{ sub = "12345678", iss = "https://api.twitch.tv/api", aud = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", exp = 1511110246, iat = 1511109346 }"""
 
@@ -220,8 +221,8 @@ type alias Video =
   , userId : String
   , title : String
   , description : String
-  , createdAt : String
-  , publishedAt : String
+  , createdAt : Date
+  , publishedAt : Date
   , url : String
   , thumbnailUrl : String
   , viewable : Viewable
@@ -242,8 +243,8 @@ video =
     |> map2 (|>) (field "user_id" string)
     |> map2 (|>) (field "title" string)
     |> map2 (|>) (field "description" string)
-    |> map2 (|>) (field "created_at" string)
-    |> map2 (|>) (field "published_at" string)
+    |> map2 (|>) (field "created_at" date)
+    |> map2 (|>) (field "published_at" date)
     |> map2 (|>) (field "url" string)
     |> map2 (|>) (field "thumbnail_url" string)
     |> map2 (|>) (field "viewable" viewable)
@@ -279,4 +280,13 @@ videoType =
       "archive" -> Archive
       "highlight" -> Highlight
       _ -> Other s
+    )
+
+
+date : Decoder Date
+date =
+  string
+    |> andThen (\s -> case Date.fromString s of
+      Ok d -> succeed d
+      Err err -> fail err
     )

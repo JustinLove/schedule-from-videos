@@ -16,5 +16,5 @@ view model =
     , text "view"
     , div []
       <| (model.videos
-      |> List.map (\video -> text video.createdAt))
+      |> List.map (\video -> text <| toString video.createdAt))
     ]
