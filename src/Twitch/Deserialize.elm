@@ -197,30 +197,38 @@ follow =
 
 sampleVideo = """
 {
-   "data":
-      [
-         {
-            "id":"172982667",
-            "user_id":"141981764",
-            "title":"Developer Demonstrations - Twitch Extensions",
-            "description":"See a demonstration of Twitch Extensions from Curse, Muxy, OP.GG, Overwolf, Proletariat, and Streamlabs.",
-            "created_at":"2017-09-07T15:20:56Z",
-            "published_at":"2017-09-18T15:12:45Z",
-            "thumbnail_url":"https://static-cdn.jtvnw.net/s3_vods/twitchdev/172982667/942dca70-f00a-4ace-bac1-ca41eea0b524/thumb/custom93d2276919a54213-%{width}x%{height}.png",
-            "view_count":307,
-            "language":"en"
-         }
-      ]
-}
-"""
+  "data": [{
+    "id": "234482848",
+    "user_id": "67955580",
+    "title": "-",
+    "description": "",
+    "created_at": "2018-03-02T20:53:41Z",
+    "published_at": "2018-03-02T20:53:41Z",
+    "url": "https://www.twitch.tv/videos/234482848",
+    "thumbnail_url": "https://static-cdn.jtvnw.net/s3_vods/bebc8cba2926d1967418_chewiemelodies_27786761696_805342775/thumb/thumb0-%{width}x%{height}.jpg",
+    "viewable": "public",
+    "view_count": 142,
+    "language": "en",
+    "type": "archive",
+    "duration": "3h8m33s"
+  }],
+  "pagination":{"cursor":"eyJiIjpudWxsLCJhIjoiMTUwMzQ0MTc3NjQyNDQyMjAwMCJ9"}
+}"""
 
 type alias Video =
   { id : String
   , userId : String
   , title : String
+  , description : String
   , createdAt : String
   , publishedAt : String
+  , url : String
   , thumbnailUrl : String
+  , viewable : String
+  , viewCount : Int
+  , language : String
+  , videoType : String
+  , duration : String
   }
 
 videos : Decoder (List Video)
@@ -229,10 +237,17 @@ videos =
 
 video : Decoder Video
 video =
-  map6 Video
-    (field "id" string)
-    (field "user_id" string)
-    (field "title" string)
-    (field "created_at" string)
-    (field "published_at" string)
-    (field "thumbnail_url" string)
+  succeed Video
+    |> map2 (|>) (field "id" string)
+    |> map2 (|>) (field "user_id" string)
+    |> map2 (|>) (field "title" string)
+    |> map2 (|>) (field "description" string)
+    |> map2 (|>) (field "created_at" string)
+    |> map2 (|>) (field "published_at" string)
+    |> map2 (|>) (field "url" string)
+    |> map2 (|>) (field "thumbnail_url" string)
+    |> map2 (|>) (field "viewable" string)
+    |> map2 (|>) (field "view_count" int)
+    |> map2 (|>) (field "language" string)
+    |> map2 (|>) (field "type" string)
+    |> map2 (|>) (field "duration" string)
