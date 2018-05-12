@@ -224,10 +224,10 @@ type alias Video =
   , publishedAt : String
   , url : String
   , thumbnailUrl : String
-  , viewable : String
+  , viewable : Viewable
   , viewCount : Int
   , language : String
-  , videoType : String
+  , videoType : VideoType
   , duration : String
   }
 
@@ -246,8 +246,37 @@ video =
     |> map2 (|>) (field "published_at" string)
     |> map2 (|>) (field "url" string)
     |> map2 (|>) (field "thumbnail_url" string)
-    |> map2 (|>) (field "viewable" string)
+    |> map2 (|>) (field "viewable" viewable)
     |> map2 (|>) (field "view_count" int)
     |> map2 (|>) (field "language" string)
-    |> map2 (|>) (field "type" string)
+    |> map2 (|>) (field "type" videoType)
     |> map2 (|>) (field "duration" string)
+
+type Viewable
+  = Public
+  | Private
+
+viewable : Decoder Viewable
+viewable =
+  string
+    |> map (\s -> case s of
+      "public" -> Public
+      "private" -> Private
+      _ -> Private
+    )
+
+type VideoType
+  = Upload
+  | Archive
+  | Highlight
+  | Other String
+
+videoType : Decoder VideoType
+videoType =
+  string
+    |> map (\s -> case s of
+      "upload" -> Upload
+      "archive" -> Archive
+      "highlight" -> Highlight
+      _ -> Other s
+    )
