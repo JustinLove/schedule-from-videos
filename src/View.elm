@@ -14,7 +14,7 @@ view model =
   div []
     [ node "style" [] [ text css ]
     , text "view"
-    , div []
+    , ul []
       <| (model.videos
-      |> List.map (\video -> text <| toString video.createdAt))
+      |> List.map (\video -> li [] [text <| toString video.duration]))
     ]

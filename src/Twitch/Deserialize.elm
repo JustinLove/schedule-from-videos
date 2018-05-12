@@ -21,6 +21,8 @@ module Twitch.Deserialize exposing
 
 import Json.Decode exposing (..)
 import Date exposing (Date)
+import Time exposing (Time)
+import Regex
 
 sampleToken = """{ sub = "12345678", iss = "https://api.twitch.tv/api", aud = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", exp = 1511110246, iat = 1511109346 }"""
 
@@ -229,7 +231,7 @@ type alias Video =
   , viewCount : Int
   , language : String
   , videoType : VideoType
-  , duration : String
+  , duration : Time
   }
 
 videos : Decoder (List Video)
@@ -251,7 +253,7 @@ video =
     |> map2 (|>) (field "view_count" int)
     |> map2 (|>) (field "language" string)
     |> map2 (|>) (field "type" videoType)
-    |> map2 (|>) (field "duration" string)
+    |> map2 (|>) (field "duration" duration)
 
 type Viewable
   = Public
@@ -280,6 +282,22 @@ videoType =
       "archive" -> Archive
       "highlight" -> Highlight
       _ -> Other s
+    )
+
+duration : Decoder Time
+duration =
+  string
+    |> map (\s -> Regex.find Regex.All (Regex.regex "(((\\d+)h)?(\\d+)m)?(\\d+)s") s
+      |> List.map .submatches
+      |> List.concatMap identity
+      |> List.reverse
+      |> List.take 3
+      |> List.map (Maybe.andThen (String.toInt >> Result.toMaybe))
+      |> List.map (Maybe.withDefault 0)
+      |> List.map2 (*) [1, 60, 60*60]
+      |> List.sum
+      |> toFloat
+      |> (*) Time.second
     )
 
 
