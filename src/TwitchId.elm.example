@@ -1,0 +1,4 @@
+module TwitchId exposing (clientId)
+
+clientId = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
