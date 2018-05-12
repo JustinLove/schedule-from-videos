@@ -14,4 +14,7 @@ view model =
   div []
     [ node "style" [] [ text css ]
     , text "view"
+    , div []
+      <| (model.videos
+      |> List.map (\video -> text video.createdAt))
     ]

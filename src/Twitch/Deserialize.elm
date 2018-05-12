@@ -11,11 +11,17 @@ module Twitch.Deserialize exposing
   , games
   , follows
   , videos
+  , sampleToken
+  , sampleUser
+  , sampleLiveStream
+  , sampleGame
+  , sampleFollow
+  , sampleVideo
   )
 
 import Json.Decode exposing (..)
 
-{- sub = "12345678", iss = "https://api.twitch.tv/api", aud = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", exp = 1511110246, iat = 1511109346 -}
+sampleToken = """{ sub = "12345678", iss = "https://api.twitch.tv/api", aud = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", exp = 1511110246, iat = 1511109346 }"""
 
 type alias Token =
   { sub : String
@@ -34,7 +40,8 @@ token =
     (field "exp" int)
     (field "iat" int)
 
-{-"data":[{
+sampleUser = """
+{"data":[{
    "id":"44322889",
    "login":"dallas",
    "display_name":"dallas",
@@ -45,12 +52,20 @@ token =
    "offline_image_url":"https://static-cdn.jtvnw.net/jtv_user_pictures/dallas-channel_offline_image-1a2c906ee2c35f12-1920x1080.png",
    "view_count":191836881,
    "email":"login@provider.com"
-}]-}
-
+}]}
+"""
 
 type alias User =
   { id : String
+  , login : String
   , displayName : String
+  , userType : String
+  , broadcasterType : String
+  , description : String
+  , profileImageUrl : String
+  , offlineImageUrl : String
+  , viewCount : Int
+  , email : Maybe String
   }
 
 users : Decoder (List User)
@@ -59,11 +74,20 @@ users =
 
 user : Decoder User
 user =
-  map2 User
-    (field "id" string)
-    (field "display_name" string)
+  succeed User
+    |> map2 (|>) (field "id" string)
+    |> map2 (|>) (field "login" string)
+    |> map2 (|>) (field "display_name" string)
+    |> map2 (|>) (field "type" string)
+    |> map2 (|>) (field "broadcaster_type" string)
+    |> map2 (|>) (field "description" string)
+    |> map2 (|>) (field "profile_image_url" string)
+    |> map2 (|>) (field "offline_image_url" string)
+    |> map2 (|>) (field "view_count" int)
+    |> map2 (|>) (maybe (field "email" string))
 
-{-"data":
+sampleLiveStream = """
+{"data":
    [
       {
          "id":"26007494656",
@@ -81,10 +105,10 @@ user =
          "language":"en",
          "thumbnail_url":"https://static-cdn.jtvnw.net/previews-ttv/live_user_lirik-{width}x{height}.jpg"
       }, 
-      ... 
    ], 
    "pagination":{"cursor":"eyJiIjpudWxsLCJhIjp7Ik9mZnNldCI6MjB9fQ=="}
--}
+}
+"""
 
 type alias LiveStream =
   { channelId : String
@@ -109,7 +133,8 @@ stream =
     (field "viewer_count" int)
     (field "thumbnail_url" string)
 
-{-"data":
+sampleGame = """
+{"data":
    [
       {
          "id":"493057",
@@ -117,7 +142,8 @@ stream =
          "box_art_url":"https://static-cdn.jtvnw.net/ttv-boxart/PLAYERUNKNOWN%27S%20BATTLEGROUNDS-{width}x{height}.jpg"
       }
    ]
--}
+}
+"""
 
 type alias Game =
   { id : String
@@ -136,7 +162,8 @@ game =
     (field "name" string)
     (field "box_art_url" string)
 
-{-"data":
+sampleFollow = """
+{"data":
    [
       {
          "from_id":"171003792",
@@ -148,10 +175,10 @@ game =
          "to_id":"23161357",
          "followed_at":"2017-08-22T22:55:04Z"
       },
-      . . . 
    ],
    "pagination":{"cursor":"eyJiIjpudWxsLCJhIjoiMTUwMzQ0MTc3NjQyNDQyMjAwMCJ9"}
--}
+}
+"""
 
 type alias Follow =
   { from_id : String
@@ -168,7 +195,8 @@ follow =
     (field "from_id" string)
     (field "to_id" string)
 
-{-
+sampleVideo = """
+{
    "data":
       [
          {
@@ -183,7 +211,8 @@ follow =
             "language":"en"
          }
       ]
--}
+}
+"""
 
 type alias Video =
   { id : String
