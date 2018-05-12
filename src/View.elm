@@ -12,6 +12,8 @@ type Msg
   = None
 
 css = """
+ul {position: relative;}
+li {list-style-type: none; background: blue; position: absolute; opacity: 0.1; height: 1em;}
 """
 
 view model = 
@@ -20,11 +22,13 @@ view model =
     , text "view"
     , ul []
       <| (toRanges model.videos
-      |> List.map (\(start, end) -> li []
-      [ text <| toString start
-      , text " - "
-      , text <| toString end
-      ]))
+      |> List.map (\(start, end) -> li
+      [ style
+        [ ("left", (toString (start / 100000)) ++ "px")
+        , ("width", (toString ((end-start) / 100000)) ++ "px")
+        ]
+      ]
+      [ ]))
     ]
 
 toRanges : List Video -> List (Time, Time)
