@@ -4,7 +4,10 @@ import Twitch.Deserialize exposing (Video)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick)
+import Collage exposing (..)
+import Collage.Layout exposing (..)
+import Collage.Render
+import Color
 import Date exposing (Date, Day(..))
 import Time exposing (Time)
 
@@ -23,29 +26,33 @@ days = [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
 view model = 
   div []
     [ node "style" [] [ text css ]
-    , div []
-      <| List.map ((videosOnDay model.videos) >> rowHeatMap) days
-    , displayScale
+    , List.map ((videosOnDay model.videos) >> rowHeatMap) days
+      |> List.intersperse (spacer 0 0.3)
+      |> vertical
+      |> scaleX 1000
+      |> scaleY 20
+      |> Collage.Render.svg
+    --, displayScale
     ]
 
 videosOnDay : List Video -> Day -> List Video
 videosOnDay videos dow =
   List.filter (\vid -> (Date.dayOfWeek vid.createdAt) == dow) videos
 
-rowHeatMap : List Video -> Html Msg
+rowHeatMap : List Video -> Collage Msg
 rowHeatMap videos =
-  div [ class "row" ]
-    <| (toRanges videos
-    |> List.map (\(start, duration) -> div
-    [ class "stream"
-    , style
-      [ ("left", (toString (start * 90 / day)) ++ "%")
-      , ("width", (toString (duration * 90 / day)) ++ "%")
-      ]
-    ]
-    []))
+  videos
+    |> toRanges
+    |> List.map (\(start, duration) ->
+      rectangle (duration / day) 1
+        |> filled (uniform Color.blue)
+        |> opacity 0.3
+        |> shiftX ((start / day) - 0.5)
+      )
+    |> group
 
-displayScale : Html Msg
+{-
+displayScale : Collage Msg
 displayScale =
   div [ class "row" ]
     <| ([0, 3, 6, 9, 12, 15, 18, 21, 24]
@@ -57,6 +64,7 @@ displayScale =
       ]
       [ text <| toString hour
       ]))
+      -}
 
 toRanges : List Video -> List (Time, Time)
 toRanges =
