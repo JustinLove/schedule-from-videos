@@ -22,10 +22,10 @@ view model =
     , text "view"
     , ul []
       <| (toRanges model.videos
-      |> List.map (\(start, end) -> li
+      |> List.map (\(start, duration) -> li
       [ style
         [ ("left", (toString (start / 100000)) ++ "px")
-        , ("width", (toString ((end-start) / 100000)) ++ "px")
+        , ("width", (toString (duration / 100000)) ++ "px")
         ]
       ]
       [ ]))
@@ -38,7 +38,7 @@ toRanges =
 toRange : Video -> (Time, Time)
 toRange video =
   ( offset video.createdAt
-  , (offset video.createdAt) + video.duration
+  , video.duration
   )
   
 offset : Date -> Time
