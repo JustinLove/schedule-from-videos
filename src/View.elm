@@ -12,8 +12,8 @@ type Msg
   = None
 
 css = """
-ul {position: relative;}
-li {list-style-type: none; background: blue; position: absolute; opacity: 0.1; height: 1em;}
+.row {position: relative;}
+.stream {background: blue; position: absolute; opacity: 0.1; height: 1em;}
 """
 
 day = toFloat (24 * 60 * 60 * 1000)
@@ -21,17 +21,21 @@ day = toFloat (24 * 60 * 60 * 1000)
 view model = 
   div []
     [ node "style" [] [ text css ]
-    , text "view"
-    , ul []
-      <| (toRanges model.videos
-      |> List.map (\(start, duration) -> li
-      [ style
-        [ ("left", (toString (start * 90 / day)) ++ "%")
-        , ("width", (toString (duration * 90 / day)) ++ "%")
-        ]
-      ]
-      [ ]))
+    , rowHeatMap model.videos
     ]
+
+rowHeatMap : List Video -> Html Msg
+rowHeatMap videos =
+  div [ class "row" ]
+    <| (toRanges videos
+    |> List.map (\(start, duration) -> div
+    [ class "stream"
+    , style
+      [ ("left", (toString (start * 90 / day)) ++ "%")
+      , ("width", (toString (duration * 90 / day)) ++ "%")
+      ]
+    ]
+    [ ]))
 
 toRanges : List Video -> List (Time, Time)
 toRanges =
