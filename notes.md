@@ -1,3 +1,3 @@
 - wraparound
 - timezones?
-- current day
+- responsive

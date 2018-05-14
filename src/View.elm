@@ -25,8 +25,10 @@ days = [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
 view model = 
   div []
     [ node "style" [] [ text css ]
-    , [ List.map ((videosOnDay model.videos) >> (rowHeatMap model.date)) days
-        --|> List.intersperse (spacer 0 0.3)
+    , [ days 
+        |> List.map (videosOnDay model.videos)
+        |> List.map rowHeatMap
+        |> List.map2 (contextDecorations model.date) days
         |> (::) (spacer 0 0.5)
         |> vertical
         |> scaleX 1000
@@ -34,10 +36,9 @@ view model =
       , spacer 0 3
       , displayScale 1000 20
       ]
-        |> List.map (Layout.align left)
         |> vertical
         |> Collage.Render.svgExplicit
-          [ Svg.Attributes.viewBox "0 0 1000 220"
+          [ Svg.Attributes.viewBox "-500 0 1000 220"
           , Html.Attributes.style
             [ ("width", "100%")
             , ("height", "auto")
@@ -49,8 +50,8 @@ videosOnDay : List Video -> Day -> List Video
 videosOnDay videos dow =
   List.filter (\vid -> (Date.dayOfWeek vid.createdAt) == dow) videos
 
-rowHeatMap : Date -> List Video -> Collage Msg
-rowHeatMap date videos =
+rowHeatMap : List Video -> Collage Msg
+rowHeatMap videos =
   videos
     |> toRanges
     |> List.map (\(start, duration) ->
@@ -59,11 +60,24 @@ rowHeatMap date videos =
         |> opacity 0.3
         |> shiftX ((start / day) - 0.5)
       )
-    |> (::) (segment (0, 0.7) (0, -0.7)
-        |> traced (solid (0.001) (uniform Color.red))
-        |> shiftX (((offset date) / day) - 0.5)
-        )
     |> group
+
+contextDecorations : Date -> Day -> Collage Msg -> Collage Msg
+contextDecorations date dow collage =
+  [ (segment (0, 0.7) (0, -0.7)
+      |> traced (solid (0.001) (uniform Color.red))
+      |> shiftX (((offset date) / day) - 0.5)
+      )
+  , (if (Date.dayOfWeek date) == dow then
+      Layout.empty
+    else
+      rectangle 1 1
+        |> filled (uniform Color.white)
+        |> opacity 0.5
+    )
+  , collage
+  ]
+  |> group
 
 displayScale : Float -> Float -> Collage Msg
 displayScale width height =
