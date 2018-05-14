@@ -17,10 +17,6 @@ type Msg
   = None
 
 css = """
-.row {position: relative; height: 1em; margin: 0.2em;}
-.stream {background: blue; position: absolute; opacity: 0.3; height: 1em;}
-.label {position: absolute; height: 1em; border-left: solid 1px;}
-svg {width: 100%; height: auto;}
 """
 
 day = toFloat (24 * 60 * 60 * 1000)
@@ -40,7 +36,13 @@ view model =
       ]
         |> List.map (Layout.align left)
         |> vertical
-        |> Collage.Render.svgExplicit [Svg.Attributes.viewBox "0 0 1000 200"]
+        |> Collage.Render.svgExplicit
+          [ Svg.Attributes.viewBox "0 0 1000 200"
+          , Html.Attributes.style
+            [ ("width", "100%")
+            , ("height", "auto")
+            ]
+          ]
     ]
 
 videosOnDay : List Video -> Day -> List Video
