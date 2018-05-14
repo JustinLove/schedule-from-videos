@@ -16,6 +16,8 @@ ul {position: relative;}
 li {list-style-type: none; background: blue; position: absolute; opacity: 0.1; height: 1em;}
 """
 
+day = toFloat (24 * 60 * 60 * 1000)
+
 view model = 
   div []
     [ node "style" [] [ text css ]
@@ -24,8 +26,8 @@ view model =
       <| (toRanges model.videos
       |> List.map (\(start, duration) -> li
       [ style
-        [ ("left", (toString (start / 100000)) ++ "px")
-        , ("width", (toString (duration / 100000)) ++ "px")
+        [ ("left", (toString (start * 90 / day)) ++ "%")
+        , ("width", (toString (duration * 90 / day)) ++ "%")
         ]
       ]
       [ ]))
