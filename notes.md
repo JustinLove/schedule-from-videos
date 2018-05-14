@@ -1,0 +1,5 @@
+- days of week
+- svg?
+- wraparound
+- timezones?
+- current time
