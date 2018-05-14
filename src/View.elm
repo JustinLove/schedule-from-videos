@@ -12,8 +12,9 @@ type Msg
   = None
 
 css = """
-.row {position: relative;}
+.row {position: relative; height: 1em;}
 .stream {background: blue; position: absolute; opacity: 0.1; height: 1em;}
+.label {position: absolute; height: 1em; border-left: solid 1px;}
 """
 
 day = toFloat (24 * 60 * 60 * 1000)
@@ -22,6 +23,7 @@ view model =
   div []
     [ node "style" [] [ text css ]
     , rowHeatMap model.videos
+    , displayScale
     ]
 
 rowHeatMap : List Video -> Html Msg
@@ -35,7 +37,20 @@ rowHeatMap videos =
       , ("width", (toString (duration * 90 / day)) ++ "%")
       ]
     ]
-    [ ]))
+    []))
+
+displayScale : Html Msg
+displayScale =
+  div [ class "row" ]
+    <| ([0, 3, 6, 9, 12, 15, 18, 21, 24]
+      |> List.map (\hour -> div
+      [ class "label"
+      , style
+        [ ("left", (toString (hour * 90 / 24)) ++ "%")
+        ]
+      ]
+      [ text <| toString hour
+      ]))
 
 toRanges : List Video -> List (Time, Time)
 toRanges =
