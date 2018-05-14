@@ -58,7 +58,7 @@ rowHeatMap videos =
       rectangle (duration / day) 1
         |> filled (uniform Color.blue)
         |> opacity 0.3
-        |> shiftX ((start / day) - 0.5)
+        |> shiftX (((start + duration/2) / day) - 0.5)
       )
     |> group
 
