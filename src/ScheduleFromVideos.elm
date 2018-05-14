@@ -8,6 +8,8 @@ import View
 import Html
 import Http
 import Time
+import Task
+import Date exposing (Date)
 
 requestLimit = 100
 rateLimit = 30
@@ -18,6 +20,7 @@ type Msg
   | Videos (Result Http.Error (List Video))
   | Response Msg
   | NextRequest Time.Time
+  | CurrentTime Time.Time
   | UI (View.Msg)
 
 type alias Model =
@@ -25,6 +28,7 @@ type alias Model =
   , videos : List Video
   , pendingRequests : List (Cmd Msg)
   , outstandingRequests : Int
+  , date : Date
   }
 
 main = Html.program
@@ -40,8 +44,9 @@ init =
     , videos = []
     , pendingRequests = [fetchUser "wondible"]
     , outstandingRequests = 1
+    , date = Date.fromTime 0
     }
-  , Cmd.none
+  , Task.perform CurrentTime Time.now
   )
 
 update msg model =
@@ -79,6 +84,8 @@ update msg model =
             , outstandingRequests = model.outstandingRequests + (if next == Cmd.none then 0 else 1)
             }, next)
         _ -> (model, Cmd.none)
+    CurrentTime time ->
+      ( {model | date = Date.fromTime time}, Cmd.none)
     UI (View.None) ->
       ( model, Cmd.none)
 
@@ -89,6 +96,7 @@ subscriptions model =
         Sub.none
       else
         Time.every (requestRate*1.05) NextRequest
+    , Time.every Time.minute CurrentTime
     ]
 
 fetchUserUrl : String -> String

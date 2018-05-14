@@ -25,8 +25,8 @@ days = [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
 view model = 
   div []
     [ node "style" [] [ text css ]
-    , [ List.map ((videosOnDay model.videos) >> rowHeatMap) days
-        |> List.intersperse (spacer 0 0.3)
+    , [ List.map ((videosOnDay model.videos) >> (rowHeatMap model.date)) days
+        --|> List.intersperse (spacer 0 0.3)
         |> (::) (spacer 0 0.5)
         |> vertical
         |> scaleX 1000
@@ -37,7 +37,7 @@ view model =
         |> List.map (Layout.align left)
         |> vertical
         |> Collage.Render.svgExplicit
-          [ Svg.Attributes.viewBox "0 0 1000 200"
+          [ Svg.Attributes.viewBox "0 0 1000 220"
           , Html.Attributes.style
             [ ("width", "100%")
             , ("height", "auto")
@@ -49,8 +49,8 @@ videosOnDay : List Video -> Day -> List Video
 videosOnDay videos dow =
   List.filter (\vid -> (Date.dayOfWeek vid.createdAt) == dow) videos
 
-rowHeatMap : List Video -> Collage Msg
-rowHeatMap videos =
+rowHeatMap : Date -> List Video -> Collage Msg
+rowHeatMap date videos =
   videos
     |> toRanges
     |> List.map (\(start, duration) ->
@@ -59,6 +59,10 @@ rowHeatMap videos =
         |> opacity 0.3
         |> shiftX ((start / day) - 0.5)
       )
+    |> (::) (segment (0, 0.7) (0, -0.7)
+        |> traced (solid (0.001) (uniform Color.red))
+        |> shiftX (((offset date) / day) - 0.5)
+        )
     |> group
 
 displayScale : Float -> Float -> Collage Msg
