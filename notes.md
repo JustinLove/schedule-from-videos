@@ -1,4 +1,3 @@
-- svg?
 - wraparound
 - timezones?
 - current time
