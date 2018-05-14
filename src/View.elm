@@ -5,26 +5,32 @@ import Twitch.Deserialize exposing (Video)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
-import Date exposing (Date)
+import Date exposing (Date, Day(..))
 import Time exposing (Time)
 
 type Msg
   = None
 
 css = """
-.row {position: relative; height: 1em;}
-.stream {background: blue; position: absolute; opacity: 0.1; height: 1em;}
+.row {position: relative; height: 1em; margin: 0.2em;}
+.stream {background: blue; position: absolute; opacity: 0.3; height: 1em;}
 .label {position: absolute; height: 1em; border-left: solid 1px;}
 """
 
 day = toFloat (24 * 60 * 60 * 1000)
+days = [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
 
 view model = 
   div []
     [ node "style" [] [ text css ]
-    , rowHeatMap model.videos
+    , div []
+      <| List.map ((videosOnDay model.videos) >> rowHeatMap) days
     , displayScale
     ]
+
+videosOnDay : List Video -> Day -> List Video
+videosOnDay videos dow =
+  List.filter (\vid -> (Date.dayOfWeek vid.createdAt) == dow) videos
 
 rowHeatMap : List Video -> Html Msg
 rowHeatMap videos =
