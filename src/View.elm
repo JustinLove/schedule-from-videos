@@ -9,6 +9,7 @@ import Collage.Layout as Layout exposing (..)
 import Collage.Text as Text exposing (..)
 import Collage.Render
 import Color
+import Svg.Attributes
 import Date exposing (Date, Day(..))
 import Time exposing (Time)
 
@@ -19,6 +20,7 @@ css = """
 .row {position: relative; height: 1em; margin: 0.2em;}
 .stream {background: blue; position: absolute; opacity: 0.3; height: 1em;}
 .label {position: absolute; height: 1em; border-left: solid 1px;}
+svg {width: 100%; height: auto;}
 """
 
 day = toFloat (24 * 60 * 60 * 1000)
@@ -29,6 +31,7 @@ view model =
     [ node "style" [] [ text css ]
     , [ List.map ((videosOnDay model.videos) >> rowHeatMap) days
         |> List.intersperse (spacer 0 0.3)
+        |> (::) (spacer 0 0.5)
         |> vertical
         |> scaleX 1000
         |> scaleY 20
@@ -37,7 +40,7 @@ view model =
       ]
         |> List.map (Layout.align left)
         |> vertical
-        |> Collage.Render.svg
+        |> Collage.Render.svgExplicit [Svg.Attributes.viewBox "0 0 1000 200"]
     ]
 
 videosOnDay : List Video -> Day -> List Video
