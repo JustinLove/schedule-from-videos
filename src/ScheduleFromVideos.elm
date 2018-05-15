@@ -75,7 +75,7 @@ update msg model =
       (model, Cmd.none)
     Videos (Ok videos) ->
       ( { model
-        | videos = List.append model.videos videos
+        | videos = videos
         }
       , Cmd.none
       )
@@ -96,8 +96,13 @@ update msg model =
       ( {model | time = time}, Cmd.none)
     WindowSize size ->
       ( {model | windowWidth = size.width, windowHeight = size.height}, Cmd.none)
-    UI (View.None) ->
-      ( model, Cmd.none)
+    UI (View.SetUsername username) ->
+      ( { model
+        | pendingRequests =
+          List.append model.pendingRequests [fetchUser username]
+        , videos = []
+        }
+      , Cmd.none)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =

@@ -1,1 +1,3 @@
+- specify user - keep in model?
+- url arguments
 - timezones?
