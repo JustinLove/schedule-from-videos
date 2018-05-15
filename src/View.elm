@@ -21,6 +21,7 @@ css = """
 
 day = toFloat (24 * 60 * 60 * 1000)
 days = [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+twitchPurple = Color.rgb 100 65 164
 
 view model = 
   div []
@@ -56,7 +57,7 @@ rowHeatMap videos =
     |> toRanges
     |> List.map (\(start, duration) ->
       rectangle (duration / day) 1
-        |> filled (uniform Color.blue)
+        |> filled (uniform twitchPurple )
         |> opacity 0.3
         |> shiftX (((start + duration/2) / day) - 0.5)
       )
