@@ -68,17 +68,22 @@ rowHeatMap videos =
 contextDecorations : Date -> Day -> Collage Msg -> Collage Msg
 contextDecorations date dow collage =
   let
-    w = Layout.width collage
-    h = Layout.height collage
+    width = Layout.width collage
+    height = Layout.height collage
   in
-  [ (segment (0, 0.5 * h) (0, -0.5 * h)
+  [ (segment (0, 0.5 * height) (0, -0.5 * height)
       |> traced (solid 1 (uniform Color.red))
-      |> shiftX (((offset date) / day) - 0.5 * h)
+      |> shiftX (((offset date) / day) - 0.5 * height)
       )
+  , (fromString <| toString dow)
+    |> Text.size (round height)
+    |> rendered
+    |> Layout.align left
+    |> shiftX (-0.5 * width + 5)
   , collage
     |> scaleY 0.8
   , (if (Date.dayOfWeek date) == dow then
-      rectangle w h
+      rectangle width height
         |> filled (uniform Color.black)
         |> opacity 0.1
     else
