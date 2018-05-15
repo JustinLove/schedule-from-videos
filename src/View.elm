@@ -22,6 +22,7 @@ css = """
 day = toFloat (24 * 60 * 60 * 1000)
 days = [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
 twitchPurple = Color.rgb 100 65 164
+labelColor = Color.greyscale 0.7
 
 view model = 
   let
@@ -106,13 +107,14 @@ contextDecorations time dow collage =
       |> traced (solid 1 (uniform Color.red))
       |> shiftX (((offset time) / day - 0.5) * width)
       )
+  , collage
+    |> scaleY 0.8
   , (fromString <| toString dow)
     |> Text.size (round height)
+    |> Text.color labelColor
     |> rendered
     |> Layout.align left
     |> shiftX (-0.5 * width + 5)
-  , collage
-    |> scaleY 0.8
   , (if (dayOfWeek time) == dow then
       rectangle width height
         |> filled (uniform Color.black)
@@ -131,7 +133,8 @@ displayScale width height =
         |> traced (solid (0.001 * width) (uniform <| Color.greyscale 0.3))
       , spacer (0.005 * width) 0
       , (fromString <| toString hour)
-        |> Text.size (round height)
+        |> Text.size (round <| Basics.min height (width / 15))
+        |> Text.color labelColor
         |> rendered
       ]
       |> horizontal
