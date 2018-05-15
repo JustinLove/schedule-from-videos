@@ -29,18 +29,20 @@ labelColor = Color.greyscale 0.7
 scheduleGraph : ScheduleGraph -> Html msg
 scheduleGraph {width, height, time, videos, days} =
   let
-    line = height / (toFloat (List.length days) + 1)
+    even = height / (toFloat (List.length days) + 1)
+    axis = Basics.min even (width / 15)
+    row = (height - axis) / (toFloat (List.length days))
   in
     [ days 
       |> List.map (videosOnDay <| breakOverDays videos)
       |> List.map (rowHeatMap
         >> scaleX width
-        >> scaleY line
+        >> scaleY row
         )
       |> List.map2 (contextDecorations time) days
       |> vertical
       |> align top
-    , displayScale width height line
+    , displayScale width height axis
       |> align top
     ]
       |> stack
@@ -108,7 +110,7 @@ contextDecorations time dow collage =
   , collage
     |> scaleY 0.8
   , (fromString <| toString dow)
-    |> Text.size (round height)
+    |> Text.size (round <| Basics.min height (width / 3))
     |> Text.color labelColor
     |> rendered
     |> align left
