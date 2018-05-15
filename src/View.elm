@@ -1,4 +1,4 @@
-module View exposing (Msg(..), view)
+module View exposing (Msg(..), ScheduleGraph, view)
 
 import Twitch.Deserialize exposing (Video)
 
@@ -16,6 +16,15 @@ import Time exposing (Time)
 type Msg
   = None
 
+type alias ScheduleGraph =
+  { width : Float
+  , height : Float
+  , time : Time
+  , days : List Day
+  , videos : List Video
+  }
+
+
 css = """
 """
 
@@ -27,11 +36,17 @@ labelColor = Color.greyscale 0.7
 view model = 
   div []
     [ node "style" [] [ text css ]
-    , scheduleGraph (toFloat model.windowWidth) (toFloat model.windowHeight) model.time model.videos
+    , scheduleGraph <|
+      { width = (toFloat model.windowWidth)
+      , height = (toFloat model.windowHeight)
+      , time = model.time
+      , days = days
+      , videos = model.videos
+      }
     ]
 
-scheduleGraph : Float -> Float -> Time -> List Video -> Html msg
-scheduleGraph width height time videos =
+scheduleGraph : ScheduleGraph -> Html msg
+scheduleGraph {width, height, time, videos, days} =
   let
     line = height / 8
   in
