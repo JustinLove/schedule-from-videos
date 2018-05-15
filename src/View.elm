@@ -27,7 +27,7 @@ view model =
   div []
     [ node "style" [] [ text css ]
     , [ days 
-        |> List.map (videosOnDay model.videos)
+        |> List.map (videosOnDay <| breakOverDays model.videos)
         |> List.map (rowHeatMap
           >> scaleX 1000
           >> scaleY 20
@@ -39,14 +39,32 @@ view model =
       , displayScale 1000 20
       ]
         |> stack
-        |> Collage.Render.svgExplicit
-          [ Svg.Attributes.viewBox "-500 -140 1100 170"
+        |> Collage.Render.svgExplicit [ Svg.Attributes.viewBox "-500 -140 1100 170"
           , Html.Attributes.style
             [ ("width", "100%")
             , ("height", "auto")
             ]
           ]
     ]
+
+breakOverDays : List Video -> List Video
+breakOverDays =
+  List.concatMap breakVideo
+
+breakVideo : Video -> List Video
+breakVideo video =
+  let
+    start = offset video.createdAt
+    remaining = day - start
+  in
+  if video.duration > remaining then
+    {video | duration = remaining} :: breakVideo
+      { video
+      | createdAt = video.createdAt + remaining
+      , duration = video.duration - remaining
+      }
+  else
+    [video]
 
 videosOnDay : List Video -> Day -> List Video
 videosOnDay videos dow =

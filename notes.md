@@ -1,3 +1,2 @@
-- wraparound
 - timezones?
 - responsive
