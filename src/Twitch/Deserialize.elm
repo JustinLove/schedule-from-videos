@@ -223,8 +223,8 @@ type alias Video =
   , userId : String
   , title : String
   , description : String
-  , createdAt : Date
-  , publishedAt : Date
+  , createdAt : Time
+  , publishedAt : Time
   , url : String
   , thumbnailUrl : String
   , viewable : Viewable
@@ -245,8 +245,8 @@ video =
     |> map2 (|>) (field "user_id" string)
     |> map2 (|>) (field "title" string)
     |> map2 (|>) (field "description" string)
-    |> map2 (|>) (field "created_at" date)
-    |> map2 (|>) (field "published_at" date)
+    |> map2 (|>) (field "created_at" timeStamp)
+    |> map2 (|>) (field "published_at" timeStamp)
     |> map2 (|>) (field "url" string)
     |> map2 (|>) (field "thumbnail_url" string)
     |> map2 (|>) (field "viewable" viewable)
@@ -301,10 +301,10 @@ duration =
     )
 
 
-date : Decoder Date
-date =
+timeStamp : Decoder Time
+timeStamp =
   string
     |> andThen (\s -> case Date.fromString s of
-      Ok d -> succeed d
+      Ok d -> succeed (Date.toTime d)
       Err err -> fail err
     )

@@ -7,9 +7,8 @@ import View
 
 import Html
 import Http
-import Time
+import Time exposing (Time)
 import Task
-import Date exposing (Date)
 
 requestLimit = 100
 rateLimit = 30
@@ -28,7 +27,7 @@ type alias Model =
   , videos : List Video
   , pendingRequests : List (Cmd Msg)
   , outstandingRequests : Int
-  , date : Date
+  , time : Time
   }
 
 main = Html.program
@@ -44,7 +43,7 @@ init =
     , videos = []
     , pendingRequests = [fetchUser "wondible"]
     , outstandingRequests = 1
-    , date = Date.fromTime 0
+    , time = 0
     }
   , Task.perform CurrentTime Time.now
   )
@@ -85,7 +84,7 @@ update msg model =
             }, next)
         _ -> (model, Cmd.none)
     CurrentTime time ->
-      ( {model | date = Date.fromTime time}, Cmd.none)
+      ( {model | time = time}, Cmd.none)
     UI (View.None) ->
       ( model, Cmd.none)
 

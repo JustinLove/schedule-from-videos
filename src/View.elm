@@ -10,7 +10,7 @@ import Collage.Text as Text exposing (..)
 import Collage.Render
 import Color
 import Svg.Attributes
-import Date exposing (Date, Day(..))
+import Date exposing (Day(..))
 import Time exposing (Time)
 
 type Msg
@@ -32,7 +32,7 @@ view model =
           >> scaleX 1000
           >> scaleY 20
           )
-        |> List.map2 (contextDecorations model.date) days
+        |> List.map2 (contextDecorations model.time) days
         |> (::) (spacer 0 10)
         |> vertical
         |> shiftY (20 * 7.0)
@@ -40,7 +40,7 @@ view model =
       ]
         |> stack
         |> Collage.Render.svgExplicit
-          [ Svg.Attributes.viewBox "-500 -140 1000 170"
+          [ Svg.Attributes.viewBox "-500 -140 1100 170"
           , Html.Attributes.style
             [ ("width", "100%")
             , ("height", "auto")
@@ -50,7 +50,7 @@ view model =
 
 videosOnDay : List Video -> Day -> List Video
 videosOnDay videos dow =
-  List.filter (\vid -> (Date.dayOfWeek vid.createdAt) == dow) videos
+  List.filter (\vid -> (dayOfWeek vid.createdAt) == dow) videos
 
 rowHeatMap : List Video -> Collage Msg
 rowHeatMap videos =
@@ -65,15 +65,15 @@ rowHeatMap videos =
     |> group
     |> setEnvelope 1 1
 
-contextDecorations : Date -> Day -> Collage Msg -> Collage Msg
-contextDecorations date dow collage =
+contextDecorations : Time -> Day -> Collage Msg -> Collage Msg
+contextDecorations time dow collage =
   let
     width = Layout.width collage
     height = Layout.height collage
   in
   [ (segment (0, 0.5 * height) (0, -0.5 * height)
       |> traced (solid 1 (uniform Color.red))
-      |> shiftX (((offset date) / day - 0.5) * width)
+      |> shiftX (((offset time) / day - 0.5) * width)
       )
   , (fromString <| toString dow)
     |> Text.size (round height)
@@ -82,7 +82,7 @@ contextDecorations date dow collage =
     |> shiftX (-0.5 * width + 5)
   , collage
     |> scaleY 0.8
-  , (if (Date.dayOfWeek date) == dow then
+  , (if (dayOfWeek time) == dow then
       rectangle width height
         |> filled (uniform Color.black)
         |> opacity 0.1
@@ -118,9 +118,14 @@ toRange video =
   ( offset video.createdAt
   , video.duration
   )
-  
-offset : Date -> Time
-offset date =
+
+dayOfWeek : Time -> Day
+dayOfWeek =
+  Date.fromTime >> Date.dayOfWeek
+
+offset : Time -> Time
+offset time =
+  let date = Date.fromTime time in
   toFloat (0
   + (Date.hour date) * 60 * 60
   + (Date.minute date) * 60
