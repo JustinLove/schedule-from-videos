@@ -28,12 +28,13 @@ view model =
     [ node "style" [] [ text css ]
     , [ days 
         |> List.map (videosOnDay model.videos)
-        |> List.map rowHeatMap
+        |> List.map (rowHeatMap
+          >> scaleX 1000
+          >> scaleY 20
+          )
         |> List.map2 (contextDecorations model.date) days
-        |> (::) (spacer 0 0.5)
+        |> (::) (spacer 0 10)
         |> vertical
-        |> scaleX 1000
-        |> scaleY 20
         |> shiftY (20 * 7.0)
       , displayScale 1000 20
       ]
@@ -62,17 +63,22 @@ rowHeatMap videos =
         |> shiftX (((start + duration/2) / day) - 0.5)
       )
     |> group
+    |> setEnvelope 1 1
 
 contextDecorations : Date -> Day -> Collage Msg -> Collage Msg
 contextDecorations date dow collage =
-  [ (segment (0, 0.5) (0, -0.5)
-      |> traced (solid (0.001) (uniform Color.red))
-      |> shiftX (((offset date) / day) - 0.5)
+  let
+    w = Layout.width collage
+    h = Layout.height collage
+  in
+  [ (segment (0, 0.5 * h) (0, -0.5 * h)
+      |> traced (solid 1 (uniform Color.red))
+      |> shiftX (((offset date) / day) - 0.5 * h)
       )
   , collage
     |> scaleY 0.8
   , (if (Date.dayOfWeek date) == dow then
-      rectangle 1 1
+      rectangle w h
         |> filled (uniform Color.black)
         |> opacity 0.1
     else
@@ -115,3 +121,7 @@ offset date =
   + (Date.minute date) * 60
   + (Date.second date)
   ) * 1000
+
+setEnvelope : Float -> Float -> Collage msg -> Collage msg
+setEnvelope width height collage =
+  impose collage (spacer width height)
