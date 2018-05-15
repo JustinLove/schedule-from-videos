@@ -30,7 +30,7 @@ scheduleGraph : ScheduleGraph -> Html msg
 scheduleGraph {width, height, time, videos, days} =
   let
     even = height / (toFloat (List.length days) + 1)
-    axis = Basics.min even (width / 15)
+    axis = min even (min (height/4) (width / 15))
     row = (height - axis) / (toFloat (List.length days))
   in
     [ days 
@@ -110,7 +110,7 @@ contextDecorations time dow collage =
   , collage
     |> scaleY 0.8
   , (fromString <| toString dow)
-    |> Text.size (round <| Basics.min height (width / 3))
+    |> Text.size (round <| min height (width / 3))
     |> Text.color labelColor
     |> rendered
     |> align left
@@ -133,7 +133,7 @@ displayScale width height line =
         |> traced (solid (0.001 * width) (uniform <| Color.greyscale 0.3))
       , spacer (0.005 * width) 0
       , (fromString <| toString hour)
-        |> Text.size (round <| Basics.min line (width / 15))
+        |> Text.size (round <| min line (width / 15))
         |> Text.color labelColor
         |> rendered
         |> shiftY (line / 2)

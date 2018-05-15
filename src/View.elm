@@ -19,7 +19,7 @@ view model =
       { width = (toFloat model.windowWidth)
       , height = (toFloat model.windowHeight)
       , time = model.time
-      , days = [Tue]
+      , days = allDays
       , videos = model.videos
       }
     ]
