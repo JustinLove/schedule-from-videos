@@ -9,6 +9,7 @@ import Html
 import Http
 import Time exposing (Time)
 import Task
+import Window
 
 requestLimit = 100
 rateLimit = 30
@@ -18,8 +19,9 @@ type Msg
   = User (Result Http.Error (List Twitch.Deserialize.User))
   | Videos (Result Http.Error (List Video))
   | Response Msg
-  | NextRequest Time.Time
-  | CurrentTime Time.Time
+  | NextRequest Time
+  | CurrentTime Time
+  | WindowSize Window.Size
   | UI (View.Msg)
 
 type alias Model =
@@ -28,6 +30,8 @@ type alias Model =
   , pendingRequests : List (Cmd Msg)
   , outstandingRequests : Int
   , time : Time
+  , windowWidth : Int
+  , windowHeight : Int
   }
 
 main = Html.program
@@ -44,8 +48,13 @@ init =
     , pendingRequests = [fetchUser "wondible"]
     , outstandingRequests = 1
     , time = 0
+    , windowWidth = 1000
+    , windowHeight = 300
     }
-  , Task.perform CurrentTime Time.now
+  , Cmd.batch
+    [ Task.perform CurrentTime Time.now
+    , Task.perform WindowSize Window.size
+    ]
   )
 
 update msg model =
@@ -85,6 +94,8 @@ update msg model =
         _ -> (model, Cmd.none)
     CurrentTime time ->
       ( {model | time = time}, Cmd.none)
+    WindowSize size ->
+      ( {model | windowWidth = size.width, windowHeight = size.height}, Cmd.none)
     UI (View.None) ->
       ( model, Cmd.none)
 
@@ -96,6 +107,7 @@ subscriptions model =
       else
         Time.every (requestRate*1.05) NextRequest
     , Time.every Time.minute CurrentTime
+    , Window.resizes WindowSize
     ]
 
 fetchUserUrl : String -> String

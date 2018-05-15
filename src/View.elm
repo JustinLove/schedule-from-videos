@@ -24,22 +24,35 @@ days = [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
 twitchPurple = Color.rgb 100 65 164
 
 view model = 
+  let
+    width = toFloat model.windowWidth
+    height = toFloat model.windowHeight
+    line = height / 8
+  in
   div []
     [ node "style" [] [ text css ]
     , [ days 
         |> List.map (videosOnDay <| breakOverDays model.videos)
         |> List.map (rowHeatMap
-          >> scaleX 1000
-          >> scaleY 20
+          >> scaleX width
+          >> scaleY line
           )
         |> List.map2 (contextDecorations model.time) days
-        |> (::) (spacer 0 10)
+        |> (::) (spacer 0 (line/2))
         |> vertical
-        |> shiftY (20 * 7.0)
-      , displayScale 1000 20
+        |> shiftY (line * 7.0)
+      , displayScale width line
       ]
         |> stack
-        |> Collage.Render.svgExplicit [ Svg.Attributes.viewBox "-500 -140 1100 170"
+        |> Collage.Render.svgExplicit
+          [ [ -0.5 * width
+            , -0.9 * height
+            , width
+            , height
+            ]
+            |> List.map toString
+            |> String.join " "
+            |> Svg.Attributes.viewBox
           , Html.Attributes.style
             [ ("width", "100%")
             , ("height", "auto")
