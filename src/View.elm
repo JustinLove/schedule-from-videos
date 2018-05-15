@@ -68,14 +68,14 @@ contextDecorations date dow collage =
       |> traced (solid (0.001) (uniform Color.red))
       |> shiftX (((offset date) / day) - 0.5)
       )
-  , (if (Date.dayOfWeek date) == dow then
-      Layout.empty
-    else
-      rectangle 1 1
-        |> filled (uniform Color.white)
-        |> opacity 0.5
-    )
   , collage
+  , (if (Date.dayOfWeek date) == dow then
+      rectangle 1.2 1.2
+        |> filled (uniform Color.black)
+        |> opacity 0.1
+    else
+      Layout.empty
+    )
   ]
   |> group
 
