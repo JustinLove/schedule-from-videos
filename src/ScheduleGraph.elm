@@ -40,7 +40,7 @@ scheduleGraph {width, height, time, videos, days} =
       |> List.map2 (contextDecorations time) days
       |> vertical
       |> align top
-    , displayScale width line
+    , displayScale width height line
       |> align top
     ]
       |> stack
@@ -123,21 +123,21 @@ contextDecorations time dow collage =
   ]
   |> group
 
-displayScale : Float -> Float -> Collage msg
-displayScale width height =
+displayScale : Float -> Float -> Float -> Collage msg
+displayScale width height line =
   [0, 3, 6, 9, 12, 15, 18, 21, 24]
     |> List.map (\hour ->
-      [ segment (0, 7.5 * height) (0, -0.5 * height)
+      [ segment (0, height) (0, 0)
         |> traced (solid (0.001 * width) (uniform <| Color.greyscale 0.3))
       , spacer (0.005 * width) 0
       , (fromString <| toString hour)
-        |> Text.size (round <| Basics.min height (width / 15))
+        |> Text.size (round <| Basics.min line (width / 15))
         |> Text.color labelColor
         |> rendered
+        |> shiftY (line / 2)
       ]
       |> horizontal
       |> shiftX (((hour / 24) - 0.5) * width)
-      |> shiftY (-height)
     )
     |> group
 
