@@ -38,15 +38,15 @@ view model =
           >> scaleY line
           )
         |> List.map2 (contextDecorations model.time) days
-        |> (::) (spacer 0 (line/2))
         |> vertical
-        |> shiftY (line * 7.0)
+        |> Layout.align top
       , displayScale width line
+        |> Layout.align top
       ]
         |> stack
         |> Collage.Render.svgExplicit
           [ [ -0.5 * width
-            , -0.9 * height
+            , 0
             , width
             , height
             ]
