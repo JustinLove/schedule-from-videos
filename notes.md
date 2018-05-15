@@ -1,3 +1,4 @@
 - specify user - keep in model?
 - url arguments
+- wiggly updates
 - timezones?
