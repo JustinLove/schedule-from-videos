@@ -25,41 +25,43 @@ twitchPurple = Color.rgb 100 65 164
 labelColor = Color.greyscale 0.7
 
 view model = 
-  let
-    width = toFloat model.windowWidth
-    height = toFloat model.windowHeight
-    line = height / 8
-  in
   div []
     [ node "style" [] [ text css ]
-    , [ days 
-        |> List.map (videosOnDay <| breakOverDays model.videos)
-        |> List.map (rowHeatMap
-          >> scaleX width
-          >> scaleY line
-          )
-        |> List.map2 (contextDecorations model.time) days
-        |> vertical
-        |> Layout.align top
-      , displayScale width line
-        |> Layout.align top
-      ]
-        |> stack
-        |> Collage.Render.svgExplicit
-          [ [ -0.5 * width
-            , 0
-            , width
-            , height
-            ]
-            |> List.map toString
-            |> String.join " "
-            |> Svg.Attributes.viewBox
-          , Html.Attributes.style
-            [ ("width", "100%")
-            , ("height", "auto")
-            ]
-          ]
+    , scheduleGraph (toFloat model.windowWidth) (toFloat model.windowHeight) model.time model.videos
     ]
+
+scheduleGraph : Float -> Float -> Time -> List Video -> Html msg
+scheduleGraph width height time videos =
+  let
+    line = height / 8
+  in
+    [ days 
+      |> List.map (videosOnDay <| breakOverDays videos)
+      |> List.map (rowHeatMap
+        >> scaleX width
+        >> scaleY line
+        )
+      |> List.map2 (contextDecorations time) days
+      |> vertical
+      |> Layout.align top
+    , displayScale width line
+      |> Layout.align top
+    ]
+      |> stack
+      |> Collage.Render.svgExplicit
+        [ [ -0.5 * width
+          , 0
+          , width
+          , height
+          ]
+          |> List.map toString
+          |> String.join " "
+          |> Svg.Attributes.viewBox
+        , Html.Attributes.style
+          [ ("width", "100%")
+          , ("height", "auto")
+          ]
+        ]
 
 breakOverDays : List Video -> List Video
 breakOverDays =
@@ -84,7 +86,7 @@ videosOnDay : List Video -> Day -> List Video
 videosOnDay videos dow =
   List.filter (\vid -> (dayOfWeek vid.createdAt) == dow) videos
 
-rowHeatMap : List Video -> Collage Msg
+rowHeatMap : List Video -> Collage msg
 rowHeatMap videos =
   videos
     |> toRanges
@@ -97,7 +99,7 @@ rowHeatMap videos =
     |> group
     |> setEnvelope 1 1
 
-contextDecorations : Time -> Day -> Collage Msg -> Collage Msg
+contextDecorations : Time -> Day -> Collage msg -> Collage msg
 contextDecorations time dow collage =
   let
     width = Layout.width collage
@@ -125,7 +127,7 @@ contextDecorations time dow collage =
   ]
   |> group
 
-displayScale : Float -> Float -> Collage Msg
+displayScale : Float -> Float -> Collage msg
 displayScale width height =
   [0, 3, 6, 9, 12, 15, 18, 21, 24]
     |> List.map (\hour ->
