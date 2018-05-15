@@ -48,7 +48,7 @@ view model =
 scheduleGraph : ScheduleGraph -> Html msg
 scheduleGraph {width, height, time, videos, days} =
   let
-    line = height / 8
+    line = height / (toFloat (List.length days) + 1)
   in
     [ days 
       |> List.map (videosOnDay <| breakOverDays videos)
