@@ -1,4 +1,5 @@
 - specify user - keep in model?
 - url arguments
 - wiggly updates
+- color coding game/topic?
 - timezones?
