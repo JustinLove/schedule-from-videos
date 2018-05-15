@@ -34,12 +34,12 @@ view model =
         |> vertical
         |> scaleX 1000
         |> scaleY 20
-      , spacer 0 3
+        |> shiftY (20 * 7.0)
       , displayScale 1000 20
       ]
-        |> vertical
+        |> stack
         |> Collage.Render.svgExplicit
-          [ Svg.Attributes.viewBox "-500 0 1000 220"
+          [ Svg.Attributes.viewBox "-500 -140 1000 170"
           , Html.Attributes.style
             [ ("width", "100%")
             , ("height", "auto")
@@ -65,13 +65,14 @@ rowHeatMap videos =
 
 contextDecorations : Date -> Day -> Collage Msg -> Collage Msg
 contextDecorations date dow collage =
-  [ (segment (0, 0.7) (0, -0.7)
+  [ (segment (0, 0.5) (0, -0.5)
       |> traced (solid (0.001) (uniform Color.red))
       |> shiftX (((offset date) / day) - 0.5)
       )
   , collage
+    |> scaleY 0.8
   , (if (Date.dayOfWeek date) == dow then
-      rectangle 1.2 1.2
+      rectangle 1 1
         |> filled (uniform Color.black)
         |> opacity 0.1
     else
@@ -84,8 +85,8 @@ displayScale : Float -> Float -> Collage Msg
 displayScale width height =
   [0, 3, 6, 9, 12, 15, 18, 21, 24]
     |> List.map (\hour ->
-      [ segment (0, 0.5 * height) (0, -0.5 * height)
-        |> traced (solid (0.001 * width) (uniform Color.black))
+      [ segment (0, 7.5 * height) (0, -0.5 * height)
+        |> traced (solid (0.001 * width) (uniform <| Color.greyscale 0.3))
       , spacer (0.005 * width) 0
       , (fromString <| toString hour)
         |> Text.size (round height)
@@ -93,6 +94,7 @@ displayScale width height =
       ]
       |> horizontal
       |> shiftX (((hour / 24) - 0.5) * width)
+      |> shiftY (-height)
     )
     |> group
 
