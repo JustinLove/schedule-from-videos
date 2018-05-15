@@ -73,7 +73,7 @@ contextDecorations date dow collage =
   in
   [ (segment (0, 0.5 * height) (0, -0.5 * height)
       |> traced (solid 1 (uniform Color.red))
-      |> shiftX (((offset date) / day) - 0.5 * height)
+      |> shiftX (((offset date) / day - 0.5) * width)
       )
   , (fromString <| toString dow)
     |> Text.size (round height)

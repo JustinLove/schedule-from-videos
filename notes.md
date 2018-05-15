@@ -1,4 +1,3 @@
-- current time off
 - wraparound
 - timezones?
 - responsive
