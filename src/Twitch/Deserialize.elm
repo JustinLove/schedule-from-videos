@@ -20,7 +20,7 @@ module Twitch.Deserialize exposing
   )
 
 import Json.Decode exposing (..)
-import Date exposing (Date)
+import Date
 import Time exposing (Time)
 import Regex
 
