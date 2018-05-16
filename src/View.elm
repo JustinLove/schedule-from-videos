@@ -31,7 +31,7 @@ view model =
       ] []
     , scheduleGraph
       [ Html.Attributes.style
-        [ ("width", "100%")
+        [ ("width", "99%")
         , ("height", "auto")
         ]
       ]
