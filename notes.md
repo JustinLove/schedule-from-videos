@@ -1,4 +1,3 @@
-- url arguments
 - parser over regex for duration
 - wiggly updates
 - color coding game/topic?

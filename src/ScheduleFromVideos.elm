@@ -7,6 +7,7 @@ import ScheduleGraph exposing (Event)
 import View
 
 import Html
+import Navigation exposing (Location)
 import Http
 import Time exposing (Time)
 import Task
@@ -21,12 +22,14 @@ type Msg
   | Videos (Result Http.Error (List Twitch.Deserialize.Video))
   | Response Msg
   | NextRequest Time
+  | CurrentUrl Location
   | CurrentTime Time
   | WindowSize Window.Size
   | UI (View.Msg)
 
 type alias Model =
-  { username : Maybe String
+  { location : Location
+  , login : Maybe String
   , userId : Maybe String
   , events : List Event
   , pendingRequests : List (Cmd Msg)
@@ -36,19 +39,31 @@ type alias Model =
   , windowHeight : Int
   }
 
-main = Html.program
+main = Navigation.program CurrentUrl
   { init = init
   , update = update
   , subscriptions = subscriptions
   , view = (\model -> Html.map UI (View.view model))
   }
 
-init : (Model, Cmd Msg)
-init =
-  ( { username = Just "wondible"
-    , userId = Nothing
+init : Location -> (Model, Cmd Msg)
+init location =
+  let
+    mlogin = Debug.log "Login" <| extractSearchArgument "login" location
+    mid = Debug.log "id" <| extractSearchArgument "id" location
+  in
+  ( { location = location
+    , login = mlogin
+    , userId = mid
     , events = []
-    , pendingRequests = [fetchUser "wondible"]
+    , pendingRequests = [
+      case mid of
+        Just id -> fetchVideos id
+        Nothing ->
+          case mlogin of
+            Just login -> fetchUser login
+            Nothing -> Cmd.none
+      ]
     , outstandingRequests = 1
     , time = 0
     , windowWidth = 1000
@@ -64,7 +79,8 @@ update msg model =
   case msg of
     User (Ok (user::_)) ->
       ( { model
-        | userId = Just user.id
+        | login = Just user.login
+        , userId = Just user.id
         , pendingRequests = List.append model.pendingRequests
           [fetchVideos user.id]
         }
@@ -95,6 +111,8 @@ update msg model =
             , outstandingRequests = model.outstandingRequests + (if next == Cmd.none then 0 else 1)
             }, next)
         _ -> (model, Cmd.none)
+    CurrentUrl location ->
+      ( { model | location = location }, Cmd.none)
     CurrentTime time ->
       ( {model | time = time}, Cmd.none)
     WindowSize size ->
@@ -145,3 +163,18 @@ fetchVideos userId =
     , tagger = Response << Videos
     , url = (fetchVideosUrl userId)
     }
+
+extractSearchArgument : String -> Location -> Maybe String
+extractSearchArgument key location =
+  location.search
+    |> String.dropLeft 1
+    |> String.split "&"
+    |> List.map (String.split "=")
+    |> List.filter (\x -> case List.head x of
+      Just s ->
+        s == key
+      Nothing ->
+        False)
+    |> List.head
+    |> Maybe.andThen List.tail
+    |> Maybe.andThen List.head

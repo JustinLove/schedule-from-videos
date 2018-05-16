@@ -27,7 +27,7 @@ view model =
       [ type_ "text"
       , id "channelname"
       , name "channelname"
-      , placeholder (Maybe.withDefault "" model.username)
+      , placeholder (Maybe.withDefault "" model.login)
       , on "change" <| targetValue Json.Decode.string SetUsername
       ] []
     , scheduleGraph
