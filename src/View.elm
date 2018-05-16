@@ -7,11 +7,16 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (on)
 import Date exposing (Day(..))
 import Json.Decode
+import Color
 
 type Msg
   = SetUsername String
 
 css = """
+body {
+  background-color: rgb(23, 20, 31);
+  color: rgb(218, 216, 222);
+}
 """
 
 view model = 
@@ -35,6 +40,13 @@ view model =
       , time = model.time
       , days = allDays
       , events = model.events
+      , style =
+        { dataColor = Color.rgb 100 65 164
+        , labelColor = Color.greyscale 0.5
+        , ruleColor = Color.greyscale 0.6
+        , currentDayColor = Color.white
+        , currentTimeColor = Color.red
+        }
       }
     ]
 
