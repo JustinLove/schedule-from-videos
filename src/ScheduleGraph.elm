@@ -1,12 +1,12 @@
 module ScheduleGraph exposing (ScheduleGraph, Event, scheduleGraph, allDays)
 
 import Html exposing (Html)
-import Html.Attributes
 import Collage exposing (..)
 import Collage.Layout as Layout exposing (..)
 import Collage.Text as Text exposing (..)
 import Collage.Render
 import Color
+import Svg
 import Svg.Attributes
 import Date exposing (Day(..))
 import Time exposing (Time)
@@ -29,8 +29,8 @@ allDays = [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
 twitchPurple = Color.rgb 100 65 164
 labelColor = Color.greyscale 0.7
 
-scheduleGraph : ScheduleGraph -> Html msg
-scheduleGraph {width, height, time, events, days} =
+scheduleGraph : List (Svg.Attribute msg) -> ScheduleGraph -> Html msg
+scheduleGraph attributes {width, height, time, events, days} =
   let
     even = height / (toFloat (List.length days) + 1)
     axis = min even (min (height/4) (width / 15))
@@ -50,7 +50,7 @@ scheduleGraph {width, height, time, events, days} =
     ]
       |> stack
       |> Collage.Render.svgExplicit
-        [ [ -0.5 * width
+        ( ( [ -0.5 * width
           , 0
           , width
           , height
@@ -58,11 +58,8 @@ scheduleGraph {width, height, time, events, days} =
           |> List.map toString
           |> String.join " "
           |> Svg.Attributes.viewBox
-        , Html.Attributes.style
-          [ ("width", "100%")
-          , ("height", "auto")
-          ]
-        ]
+          ) :: attributes
+        )
 
 breakOverDays : List Event -> List Event
 breakOverDays =

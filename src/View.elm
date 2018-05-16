@@ -24,7 +24,12 @@ view model =
       , name "twitchname"
       , on "change" <| targetValue Json.Decode.string SetUsername
       ] []
-    , scheduleGraph <|
+    , scheduleGraph
+      [ Html.Attributes.style
+        [ ("width", "100%")
+        , ("height", "auto")
+        ]
+      ]
       { width = (toFloat model.windowWidth)
       , height = (toFloat model.windowHeight) - 20
       , time = model.time
