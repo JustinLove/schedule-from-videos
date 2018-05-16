@@ -1,8 +1,9 @@
 module ScheduleFromVideos exposing (..)
 
-import Twitch.Deserialize exposing (Video)
+import Twitch.Deserialize
 import Twitch exposing (helix)
 import TwitchId
+import ScheduleGraph exposing (Event)
 import View
 
 import Html
@@ -17,7 +18,7 @@ requestRate = 60*Time.second/rateLimit
 
 type Msg
   = User (Result Http.Error (List Twitch.Deserialize.User))
-  | Videos (Result Http.Error (List Video))
+  | Videos (Result Http.Error (List Twitch.Deserialize.Video))
   | Response Msg
   | NextRequest Time
   | CurrentTime Time
@@ -26,7 +27,7 @@ type Msg
 
 type alias Model =
   { userId : Maybe String
-  , videos : List Video
+  , events : List Event
   , pendingRequests : List (Cmd Msg)
   , outstandingRequests : Int
   , time : Time
@@ -44,7 +45,7 @@ main = Html.program
 init : (Model, Cmd Msg)
 init =
   ( { userId = Nothing
-    , videos = []
+    , events = []
     , pendingRequests = [fetchUser "wondible"]
     , outstandingRequests = 1
     , time = 0
@@ -75,7 +76,7 @@ update msg model =
       (model, Cmd.none)
     Videos (Ok videos) ->
       ( { model
-        | videos = videos
+        | events = List.map (\v -> {start = v.createdAt, duration = v.duration}) videos
         }
       , Cmd.none
       )
@@ -100,7 +101,7 @@ update msg model =
       ( { model
         | pendingRequests =
           List.append model.pendingRequests [fetchUser username]
-        , videos = []
+        , events = []
         }
       , Cmd.none)
 

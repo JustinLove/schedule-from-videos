@@ -1,6 +1,4 @@
-module ScheduleGraph exposing (ScheduleGraph, scheduleGraph, allDays)
-
-import Twitch.Deserialize exposing (Video)
+module ScheduleGraph exposing (ScheduleGraph, Event, scheduleGraph, allDays)
 
 import Html exposing (Html)
 import Html.Attributes
@@ -18,7 +16,12 @@ type alias ScheduleGraph =
   , height : Float
   , time : Time
   , days : List Day
-  , videos : List Video
+  , events : List Event
+  }
+
+type alias Event =
+  { start : Time
+  , duration : Time
   }
 
 day = toFloat (24 * 60 * 60 * 1000)
@@ -27,14 +30,14 @@ twitchPurple = Color.rgb 100 65 164
 labelColor = Color.greyscale 0.7
 
 scheduleGraph : ScheduleGraph -> Html msg
-scheduleGraph {width, height, time, videos, days} =
+scheduleGraph {width, height, time, events, days} =
   let
     even = height / (toFloat (List.length days) + 1)
     axis = min even (min (height/4) (width / 15))
     row = (height - axis) / (toFloat (List.length days))
   in
     [ days 
-      |> List.map (videosOnDay <| breakOverDays videos)
+      |> List.map (eventsOnDay <| breakOverDays events)
       |> List.map (rowHeatMap
         >> scaleX width
         >> scaleY row
@@ -61,32 +64,32 @@ scheduleGraph {width, height, time, videos, days} =
           ]
         ]
 
-breakOverDays : List Video -> List Video
+breakOverDays : List Event -> List Event
 breakOverDays =
-  List.concatMap breakVideo
+  List.concatMap breakEvent
 
-breakVideo : Video -> List Video
-breakVideo video =
+breakEvent : Event -> List Event
+breakEvent event =
   let
-    start = offset video.createdAt
+    start = offset event.start
     remaining = day - start
   in
-  if video.duration > remaining then
-    {video | duration = remaining} :: breakVideo
-      { video
-      | createdAt = video.createdAt + remaining
-      , duration = video.duration - remaining
+  if event.duration > remaining then
+    {event | duration = remaining} :: breakEvent
+      { event
+      | start = event.start + remaining
+      , duration = event.duration - remaining
       }
   else
-    [video]
+    [event]
 
-videosOnDay : List Video -> Day -> List Video
-videosOnDay videos dow =
-  List.filter (\vid -> (dayOfWeek vid.createdAt) == dow) videos
+eventsOnDay : List Event -> Day -> List Event
+eventsOnDay events dow =
+  List.filter (\vid -> (dayOfWeek vid.start) == dow) events
 
-rowHeatMap : List Video -> Collage msg
-rowHeatMap videos =
-  videos
+rowHeatMap : List Event -> Collage msg
+rowHeatMap events =
+  events
     |> toRanges
     |> List.map (\(start, duration) ->
       rectangle (duration / day) 1
@@ -143,14 +146,14 @@ displayScale width height line =
     )
     |> group
 
-toRanges : List Video -> List (Time, Time)
+toRanges : List Event -> List (Time, Time)
 toRanges =
   List.map toRange
 
-toRange : Video -> (Time, Time)
-toRange video =
-  ( offset video.createdAt
-  , video.duration
+toRange : Event -> (Time, Time)
+toRange event =
+  ( offset event.start
+  , event.duration
   )
 
 dayOfWeek : Time -> Day

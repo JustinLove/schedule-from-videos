@@ -29,7 +29,7 @@ view model =
       , height = (toFloat model.windowHeight) - 20
       , time = model.time
       , days = allDays
-      , videos = model.videos
+      , events = model.events
       }
     ]
 
