@@ -58,10 +58,10 @@ init location =
     , events = []
     , pendingRequests = [
       case mid of
-        Just id -> fetchVideos id
+        Just id -> fetchUserById id
         Nothing ->
           case mlogin of
-            Just login -> fetchUser login
+            Just login -> fetchUserByName login
             Nothing -> Cmd.none
       ]
     , outstandingRequests = 1
@@ -120,7 +120,7 @@ update msg model =
     UI (View.SetUsername username) ->
       ( { model
         | pendingRequests =
-          List.append model.pendingRequests [fetchUser username]
+          List.append model.pendingRequests [fetchUserByName username]
         , events = []
         }
       , Cmd.none)
@@ -136,18 +136,32 @@ subscriptions model =
     , Window.resizes WindowSize
     ]
 
-fetchUserUrl : String -> String
-fetchUserUrl login =
+fetchUserByNameUrl : String -> String
+fetchUserByNameUrl login =
   "https://api.twitch.tv/helix/users?login=" ++ login
 
-fetchUser : String -> Cmd Msg
-fetchUser login =
+fetchUserByName : String -> Cmd Msg
+fetchUserByName login =
   helix <|
     { clientId = TwitchId.clientId
     , auth = Nothing
     , decoder = Twitch.Deserialize.users
     , tagger = Response << User
-    , url = (fetchUserUrl login)
+    , url = (fetchUserByNameUrl login)
+    }
+
+fetchUserByIdUrl : String -> String
+fetchUserByIdUrl id =
+  "https://api.twitch.tv/helix/users?id=" ++ id
+
+fetchUserById : String -> Cmd Msg
+fetchUserById id =
+  helix <|
+    { clientId = TwitchId.clientId
+    , auth = Nothing
+    , decoder = Twitch.Deserialize.users
+    , tagger = Response << User
+    , url = (fetchUserByIdUrl id)
     }
 
 fetchVideosUrl : String -> String
