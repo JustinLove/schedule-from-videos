@@ -1,4 +1,3 @@
-- specify user - keep in model?
 - url arguments
 - parser over regex for duration
 - wiggly updates

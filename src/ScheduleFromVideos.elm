@@ -26,7 +26,8 @@ type Msg
   | UI (View.Msg)
 
 type alias Model =
-  { userId : Maybe String
+  { username : Maybe String
+  , userId : Maybe String
   , events : List Event
   , pendingRequests : List (Cmd Msg)
   , outstandingRequests : Int
@@ -44,7 +45,8 @@ main = Html.program
 
 init : (Model, Cmd Msg)
 init =
-  ( { userId = Nothing
+  ( { username = Just "wondible"
+    , userId = Nothing
     , events = []
     , pendingRequests = [fetchUser "wondible"]
     , outstandingRequests = 1

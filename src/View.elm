@@ -22,11 +22,12 @@ body {
 view model = 
   div []
     [ node "style" [] [ text css ]
-    , label [ for "twitchname" ] [ text "Twitch User" ]
+    , label [ for "channelname" ] [ text "Channel Name" ]
     , input
       [ type_ "text"
-      , id "twitchname"
-      , name "twitchname"
+      , id "channelname"
+      , name "channelname"
+      , placeholder (Maybe.withDefault "" model.username)
       , on "change" <| targetValue Json.Decode.string SetUsername
       ] []
     , scheduleGraph
