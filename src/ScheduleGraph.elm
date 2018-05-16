@@ -138,7 +138,7 @@ displayScale style width height line =
   [0, 3, 6, 9, 12, 15, 18, 21, 24]
     |> List.map (\hour ->
       [ segment (0, height) (0, 0)
-        |> traced (solid (0.001 * width) (uniform style.ruleColor))
+        |> traced (solid ultrathin (uniform style.ruleColor))
       , spacer (0.005 * width) 0
       , (fromString <| toString hour)
         |> Text.size (round <| min line (width / 15))
