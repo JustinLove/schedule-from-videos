@@ -19,10 +19,12 @@ module Twitch.Deserialize exposing
   , sampleVideo
   )
 
+import Twitch.Parse as Parse
+
 import Json.Decode exposing (..)
+import Parser
 import Date
 import Time exposing (Time)
-import Regex
 
 sampleToken = """{ sub = "12345678", iss = "https://api.twitch.tv/api", aud = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", exp = 1511110246, iat = 1511109346 }"""
 
@@ -287,19 +289,11 @@ videoType =
 duration : Decoder Time
 duration =
   string
-    |> map (\s -> Regex.find Regex.All (Regex.regex "(((\\d+)h)?(\\d+)m)?(\\d+)s") s
-      |> List.map .submatches
-      |> List.concatMap identity
-      |> List.reverse
-      |> List.take 3
-      |> List.map (Maybe.andThen (String.toInt >> Result.toMaybe))
-      |> List.map (Maybe.withDefault 0)
-      |> List.map2 (*) [1, 60, 60*60]
-      |> List.sum
-      |> toFloat
-      |> (*) Time.second
+    |> map (\s -> case Parser.run Parse.duration s of
+      Ok d -> d
+      Err err ->
+        let _ = Debug.log "duration parse error" err in 0
     )
-
 
 timeStamp : Decoder Time
 timeStamp =
