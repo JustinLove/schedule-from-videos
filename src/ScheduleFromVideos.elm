@@ -84,7 +84,10 @@ update msg model =
         , pendingRequests = List.append model.pendingRequests
           [fetchVideos user.id]
         }
-      , Cmd.none
+      , if (Just user.id) /= model.userId then
+          Navigation.modifyUrl (model.location.pathname ++ "?userId="  ++ user.id)
+        else
+          Cmd.none
       )
     User (Ok _) ->
       let _ = Debug.log "user did not find that login name" "" in
