@@ -97,7 +97,9 @@ update msg model =
       (model, Cmd.none)
     Videos (Ok videos) ->
       ( { model
-        | events = List.map (\v -> {start = v.createdAt, duration = v.duration}) videos
+        | events = videos
+          |> List.filter (\v -> v.videoType == Twitch.Deserialize.Archive)
+          |> List.map (\v -> {start = v.createdAt, duration = v.duration})
         }
       , Cmd.none
       )

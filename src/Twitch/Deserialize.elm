@@ -5,6 +5,8 @@ module Twitch.Deserialize exposing
   , Game
   , Follow
   , Video
+  , VideoType(..)
+  , Viewable(..)
   , token
   , users
   , liveStreams
