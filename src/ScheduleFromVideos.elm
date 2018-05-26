@@ -50,14 +50,14 @@ init : Location -> (Model, Cmd Msg)
 init location =
   let
     mlogin = Debug.log "Login" <| extractSearchArgument "login" location
-    mid = Debug.log "id" <| extractSearchArgument "id" location
+    muserId = Debug.log "userId" <| extractSearchArgument "userId" location
   in
   ( { location = location
     , login = mlogin
-    , userId = mid
+    , userId = muserId
     , events = []
     , pendingRequests = [
-      case mid of
+      case muserId of
         Just id -> fetchUserById id
         Nothing ->
           case mlogin of
@@ -186,7 +186,7 @@ extractSearchArgument key location =
     |> List.map (String.split "=")
     |> List.filter (\x -> case List.head x of
       Just s ->
-        s == key
+        (String.toLower s) == (String.toLower key)
       Nothing ->
         False)
     |> List.head
