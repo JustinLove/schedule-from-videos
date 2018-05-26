@@ -125,9 +125,9 @@ contextDecorations style time dow collage =
     |> align left
     |> shiftX (-0.5 * width + 5)
   , (if (dayOfWeek time) == dow then
-      rectangle width height
-        |> filled (uniform style.currentDayColor)
-        |> opacity 0.1
+      (segment (0.5 * width, 0) (-0.5 * width, 0)
+        |> traced (solid mark (uniform style.currentDayColor))
+        )
     else
       Layout.empty
     )
