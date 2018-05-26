@@ -44,7 +44,7 @@ view model =
       , style =
         { dataColor = Color.rgb 100 65 164
         , labelColor = Color.greyscale 0.5
-        , ruleColor = Color.greyscale 0.6
+        , ruleColor = Color.greyscale 0.7
         , currentDayColor = Color.white
         , currentTimeColor = Color.red
         }

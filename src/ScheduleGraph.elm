@@ -110,9 +110,10 @@ contextDecorations style time dow collage =
   let
     width = Layout.width collage
     height = Layout.height collage
+    mark = max 1 (logBase 10 width)
   in
-  [ (segment (0, 0.5 * height) (0, -0.5 * height)
-      |> traced (solid 1 (uniform style.currentTimeColor))
+  [ (segment (0, 0.51 * height) (0, -0.51 * height)
+      |> traced (solid mark (uniform style.currentTimeColor))
       |> shiftX (((offset time) / day - 0.5) * width)
       )
   , collage
@@ -135,10 +136,11 @@ contextDecorations style time dow collage =
 
 displayScale : Style -> Float -> Float -> Float -> Collage msg
 displayScale style width height line =
+  let mark = max ultrathin ((logBase 10 width) * 0.55) in
   [0, 3, 6, 9, 12, 15, 18, 21, 24]
     |> List.map (\hour ->
       [ segment (0, height) (0, 0)
-        |> traced (solid ultrathin (uniform style.ruleColor))
+        |> traced (solid mark (uniform style.ruleColor))
       , spacer (0.005 * width) 0
       , (fromString <| toString hour)
         |> Text.size (round <| min line (width / 15))
