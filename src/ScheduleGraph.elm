@@ -43,10 +43,13 @@ scheduleGraph attributes {width, height, time, events, days, style} =
     even = height / (toFloat (List.length days) + 1)
     axis = min even (min (height/4) (width / 15))
     row = (height - axis) / (toFloat (List.length days))
+    starts = List.map .start events
+    first = List.minimum starts |> Maybe.withDefault 0
+    timeRange = (first, (List.maximum starts |> Maybe.withDefault 0) - first)
   in
     [ days 
       |> List.map (eventsOnDay <| breakOverDays events)
-      |> List.map ((rowHeatMap style)
+      |> List.map ((rowHeatMap style timeRange)
         >> scaleX width
         >> scaleY row
         )
@@ -92,15 +95,17 @@ eventsOnDay : List Event -> Day -> List Event
 eventsOnDay events dow =
   List.filter (\vid -> (dayOfWeek vid.start) == dow) events
 
-rowHeatMap : Style -> List Event -> Collage msg
-rowHeatMap style events =
+rowHeatMap : Style -> (Time, Time) -> List Event -> Collage msg
+rowHeatMap style ((first, range) as timeRange) events =
   events
-    |> toRanges
-    |> List.map (\(start, duration) ->
+    |> toRanges timeRange
+    |> List.map (\(start, duration, age) ->
       rectangle (duration / day) 1
         |> filled (uniform style.dataColor)
         |> opacity 0.3
         |> shiftX (((start + duration/2) / day) - 0.5)
+        |> shiftY ((((age + range/2) / range) - 0.5) * 0.3)
+        |> scaleY 0.85
       )
     |> group
     |> setEnvelope 1 1
@@ -153,14 +158,15 @@ displayScale style width height line =
     )
     |> group
 
-toRanges : List Event -> List (Time, Time)
-toRanges =
-  List.map toRange
+toRanges : (Time, Time) -> List Event -> List (Time, Time, Time)
+toRanges timeRange =
+  List.map (toRange timeRange)
 
-toRange : Event -> (Time, Time)
-toRange event =
+toRange : (Time, Time) -> Event -> (Time, Time, Time)
+toRange (first, range) event =
   ( offset event.start
   , event.duration
+  , first + range - event.start
   )
 
 dayOfWeek : Time -> Day
