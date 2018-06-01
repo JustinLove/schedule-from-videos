@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-watch "elm-make src/ScheduleFromVideos.elm --output public/index.html" src
+watch "elm-make src/ScheduleFromVideos.elm --output public/schedule-from-videos.js" src/
