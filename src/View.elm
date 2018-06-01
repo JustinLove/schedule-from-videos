@@ -38,7 +38,7 @@ a:hover, a:active { color: rgb(218, 216, 222); }
 view model = 
   div []
     [ node "style" [] [ text css ]
-    , label [ for "channelname" ] [ text "Channel Name" ]
+    , label [ for "channelname" ] [ text "Channel Name " ]
     , input
       [ type_ "text"
       , id "channelname"
