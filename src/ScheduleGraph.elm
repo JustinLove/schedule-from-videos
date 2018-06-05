@@ -100,11 +100,11 @@ rowHeatMap style ((first, range) as timeRange) events =
   events
     |> toRanges timeRange
     |> List.map (\(start, duration, age) ->
-      rectangle (duration / day) 1
+      rectangle (duration / day) 0.1
         |> filled (uniform style.dataColor)
-        |> opacity 0.3
+        |> opacity 0.9
         |> shiftX (((start + duration/2) / day) - 0.5)
-        |> shiftY ((((age + range/2) / range) - 0.5) * 0.3)
+        |> shiftY ((((age + range/2) / range) - 1.0) * 0.8)
         |> scaleY 0.85
       )
     |> group
