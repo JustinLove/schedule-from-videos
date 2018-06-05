@@ -8,7 +8,7 @@ import Collage.Render
 import Color exposing (Color)
 import Svg
 import Svg.Attributes
-import Date exposing (Day(..))
+import Date exposing (Day(..), Month(..))
 import Time exposing (Time)
 
 type alias ScheduleGraph =
@@ -45,6 +45,26 @@ dayStripe dow =
     Fri -> False
     Sat -> True
     Sun -> False
+monthNum mon =
+  case mon of
+    Jan -> "01"
+    Feb -> "02"
+    Mar -> "03"
+    Apr -> "04"
+    May -> "05"
+    Jun -> "06"
+    Jul -> "07"
+    Aug -> "08"
+    Sep -> "09"
+    Oct -> "10"
+    Nov -> "11"
+    Dec -> "12"
+numberPad : Int -> String
+numberPad i =
+  if i < 10 then
+    "0" ++ (toString i)
+  else
+    toString i
 
 scheduleGraph : List (Svg.Attribute msg) -> ScheduleGraph -> Html msg
 scheduleGraph attributes {width, height, time, events, days, style} =
@@ -65,7 +85,7 @@ scheduleGraph attributes {width, height, time, events, days, style} =
       |> List.map2 (contextDecorations style time) days
       |> vertical
       |> align top
-    , displayScale style width height axis
+    , displayScale timeRange style width height axis
       |> align top
     ]
       |> stack
@@ -154,8 +174,35 @@ contextDecorations style time dow collage =
   ]
   |> group
 
-displayScale : Style -> Float -> Float -> Float -> Collage msg
-displayScale style width height line =
+displayScale : (Time, Time) -> Style -> Float -> Float -> Float -> Collage msg
+displayScale (first, range) style width height line =
+  let
+    startDate = Date.fromTime first
+    start = (toString <| Date.year startDate) ++ "-" ++
+            (monthNum <| Date.month startDate) ++ "-" ++
+            (numberPad <| Date.day startDate)
+    endDate = Date.fromTime (first + range)
+    end = (toString <| Date.year endDate) ++ "-" ++
+          (monthNum <| Date.month endDate) ++ "-" ++
+          (numberPad <| Date.day endDate)
+  in
+  [ displayTimeScale style width height line
+  , (fromString start)
+    |> Text.size (round <| line/4)
+    |> Text.color style.labelColor
+    |> rendered
+    |> shiftY (height - line/4)
+    |> shiftX (-width/4)
+  , (fromString end)
+    |> Text.size (round <| line/4)
+    |> Text.color style.labelColor
+    |> rendered
+    |> shiftY (line * 1.1)
+    |> shiftX (width * 0.4)
+  ] |> group
+
+displayTimeScale : Style -> Float -> Float -> Float -> Collage msg
+displayTimeScale style width height line =
   let mark = max ultrathin ((logBase 10 width) * 0.55) in
   [0, 3, 6, 9, 12, 15, 18, 21, 24]
     |> List.map (\hour ->
