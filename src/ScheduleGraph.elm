@@ -116,8 +116,19 @@ contextDecorations style time dow collage =
     width = Layout.width collage
     height = Layout.height collage
     mark = max 1 (logBase 10 width)
+    stripe = allDays
+      |> List.indexedMap (\i day -> if day == dow then Just (i%2) else Nothing)
+      |> List.filterMap identity
+      |> List.head
+      |> Maybe.withDefault 0
   in
-  [ (segment (0, 0.51 * height) (0, -0.51 * height)
+  [ if stripe == 1 then
+      rectangle width height
+        |> filled (uniform style.labelColor)
+        |> opacity 0.1
+    else
+      Layout.empty
+  , (segment (0, 0.51 * height) (0, -0.51 * height)
       |> traced (solid mark (uniform style.currentTimeColor))
       |> shiftX (((offset time) / day - 0.5) * width)
       )
