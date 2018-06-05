@@ -36,6 +36,15 @@ type alias Style =
 
 day = toFloat (24 * 60 * 60 * 1000)
 allDays = [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+dayStripe dow =
+  case dow of
+    Mon -> False
+    Tue -> True
+    Wed -> False
+    Thu -> True
+    Fri -> False
+    Sat -> True
+    Sun -> False
 
 scheduleGraph : List (Svg.Attribute msg) -> ScheduleGraph -> Html msg
 scheduleGraph attributes {width, height, time, events, days, style} =
@@ -116,13 +125,8 @@ contextDecorations style time dow collage =
     width = Layout.width collage
     height = Layout.height collage
     mark = max 1 (logBase 10 width)
-    stripe = allDays
-      |> List.indexedMap (\i day -> if day == dow then Just (i%2) else Nothing)
-      |> List.filterMap identity
-      |> List.head
-      |> Maybe.withDefault 0
   in
-  [ if stripe == 1 then
+  [ if dayStripe dow then
       rectangle width height
         |> filled (uniform style.labelColor)
         |> opacity 0.1
