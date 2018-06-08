@@ -133,8 +133,8 @@ rowHeatMap style ((first, range) as timeRange) events =
         |> filled (uniform style.dataColor)
         |> opacity 0.9
         |> shiftX (((start + duration/2) / day) - 0.5)
-        |> shiftY ((((age + range/2) / range) - 1.0) * 0.8)
-        |> scaleY 0.85
+        |> shiftY ((age / range) - 0.5)
+        |> scaleY 0.70
       )
     |> group
     |> setEnvelope 1 1
