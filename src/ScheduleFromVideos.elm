@@ -1,7 +1,7 @@
 module ScheduleFromVideos exposing (..)
 
-import Twitch.Deserialize
-import Twitch exposing (helix)
+import Twitch.Helix.Decode as Helix
+import Twitch.Helix as Helix
 import TwitchId
 import ScheduleGraph exposing (Event)
 import View
@@ -18,8 +18,8 @@ rateLimit = 30
 requestRate = 60*Time.second/rateLimit
 
 type Msg
-  = User (Result Http.Error (List Twitch.Deserialize.User))
-  | Videos (Result Http.Error (List Twitch.Deserialize.Video))
+  = User (Result Http.Error (List Helix.User))
+  | Videos (Result Http.Error (List Helix.Video))
   | Response Msg
   | NextRequest Time
   | CurrentUrl Location
@@ -98,7 +98,7 @@ update msg model =
     Videos (Ok videos) ->
       ( { model
         | events = videos
-          |> List.filter (\v -> v.videoType == Twitch.Deserialize.Archive)
+          |> List.filter (\v -> v.videoType == Helix.Archive)
           |> List.map (\v -> {start = v.createdAt, duration = v.duration})
         }
       , Cmd.none
@@ -147,10 +147,10 @@ fetchUserByNameUrl login =
 
 fetchUserByName : String -> Cmd Msg
 fetchUserByName login =
-  helix <|
+  Helix.send <|
     { clientId = TwitchId.clientId
     , auth = Nothing
-    , decoder = Twitch.Deserialize.users
+    , decoder = Helix.users
     , tagger = Response << User
     , url = (fetchUserByNameUrl login)
     }
@@ -161,10 +161,10 @@ fetchUserByIdUrl id =
 
 fetchUserById : String -> Cmd Msg
 fetchUserById id =
-  helix <|
+  Helix.send <|
     { clientId = TwitchId.clientId
     , auth = Nothing
-    , decoder = Twitch.Deserialize.users
+    , decoder = Helix.users
     , tagger = Response << User
     , url = (fetchUserByIdUrl id)
     }
@@ -175,10 +175,10 @@ fetchVideosUrl userId =
 
 fetchVideos : String -> Cmd Msg
 fetchVideos userId =
-  helix <|
+  Helix.send <|
     { clientId = TwitchId.clientId
     , auth = Nothing
-    , decoder = Twitch.Deserialize.videos
+    , decoder = Helix.videos
     , tagger = Response << Videos
     , url = (fetchVideosUrl userId)
     }
