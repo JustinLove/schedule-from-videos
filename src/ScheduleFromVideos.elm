@@ -2,6 +2,7 @@ module ScheduleFromVideos exposing (..)
 
 import Twitch.Helix.Decode as Helix
 import Twitch.Helix as Helix
+import TwitchExt
 import TwitchId
 import ScheduleGraph exposing (Event)
 import View
@@ -25,6 +26,7 @@ type Msg
   | CurrentUrl Location
   | CurrentTime Time
   | WindowSize Window.Size
+  | OnAuthorized TwitchExt.Auth
   | UI (View.Msg)
 
 type alias Model =
@@ -122,6 +124,18 @@ update msg model =
       ( {model | time = time}, Cmd.none)
     WindowSize size ->
       ( {model | windowWidth = size.width, windowHeight = size.height}, Cmd.none)
+    OnAuthorized auth ->
+      case String.toInt auth.channelId of
+        Ok _ ->
+          ( { model
+            | userId = Just auth.channelId
+            , pendingRequests = List.append model.pendingRequests
+              [fetchVideos auth.channelId]
+            }
+          , Cmd.none
+          )
+        Err _ ->
+          (model, Cmd.none)
     UI (View.SetUsername username) ->
       ( { model
         | pendingRequests =
@@ -139,6 +153,7 @@ subscriptions model =
         Time.every (requestRate*1.05) NextRequest
     , Time.every Time.minute CurrentTime
     , Window.resizes WindowSize
+    , TwitchExt.onAuthorized OnAuthorized
     ]
 
 fetchUserByNameUrl : String -> String
