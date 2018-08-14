@@ -3,7 +3,7 @@ port module TwitchExt exposing (..)
 import Json.Decode exposing (..)
 
 port onAuthorized : (Auth -> msg) -> Sub msg
-port onContext : (Json.Decode.Value -> msg) -> Sub msg
+port onContext : (Context -> msg) -> Sub msg
 port onError : (Json.Decode.Value -> msg) -> Sub msg
 
 type alias Auth =
@@ -20,3 +20,14 @@ auth =
     (field "clientId" string)
     (field "token" string)
     (field "userId" string)
+
+type alias Context =
+  { theme : String
+  , mode : String
+  }
+
+context : Decoder Context
+context =
+  map2 Context
+    (field "theme" string)
+    (field "mode" string)

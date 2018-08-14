@@ -19,10 +19,8 @@ type Mode
   | Extension
 
 css = """
-body {
-  background-color: rgb(23, 20, 31);
-  color: rgb(218, 216, 222);
-}
+body { margin: 0; }
+#top { padding: 8px; }
 h2 { text-align: center; margin: 0;}
 footer { position: fixed; bottom: 0;}
 svg.icon {
@@ -34,15 +32,30 @@ svg.icon {
   stroke: currentColor;
   fill: currentColor;
 }
-.icon-github { color: #888; }
-.icon-twitter { color: #55acee; }
-.icon-twitch { color: #6441A4; }
-a:link, a:visited { color: #b19dd8; }
-a:hover, a:active { color: rgb(218, 216, 222); }
+
+#top.dark {
+  background-color: #301c2b;
+  color: #e5e3e8;
+}
+.dark .icon-github { color: #888; }
+.dark .icon-twitter { color: #55acee; }
+.dark .icon-twitch { color: #6441A4; }
+.dark a:link, .dark a:visited { color: #6441a4; }
+.dark a:hover, .dark a:active { color: rgb(218, 216, 222); }
+
+#top.light {
+  background-color: #fff;
+  color: #232127;
+}
+.light .icon-github { color: #888; }
+.light .icon-twitter { color: #55acee; }
+.light .icon-twitch { color: #e2dbf0; }
+.light a:link, .light a:visited { color: #e2dbf0; }
+.light a:hover, .light a:active { color: rgb(218, 216, 222); }
 """
 
 view model = 
-  div []
+  div [ id "top", class model.theme ]
     [ node "style" [] [ text css ]
     , case model.mode of
       Page -> 
@@ -65,17 +78,29 @@ view model =
         ]
       ]
       { width = (toFloat model.windowWidth)
-      , height = (toFloat model.windowHeight) - 30
+      , height = (toFloat model.windowHeight) - (case model.mode of
+          Page -> 20
+          Extension -> 28
+        )
       , time = model.time
       , days = allDays
       , events = List.filter (\e -> e.duration < (56 * 60 * 60 * 1000)) model.events
       , style =
-        { dataColor = Color.rgb 100 65 164
-        , labelColor = Color.greyscale 0.5
-        , ruleColor = Color.greyscale 0.7
-        , currentDayColor = Color.red
-        , currentTimeColor = Color.red
-        }
+        case model.theme of 
+          "light" ->
+            { dataColor = Color.rgb 100 65 164
+            , labelColor = Color.greyscale 0.5
+            , ruleColor = Color.greyscale 0.3
+            , currentDayColor = Color.red
+            , currentTimeColor = Color.red
+            }
+          _ ->
+            { dataColor = Color.rgb 100 65 164
+            , labelColor = Color.greyscale 0.5
+            , ruleColor = Color.greyscale 0.7
+            , currentDayColor = Color.red
+            , currentTimeColor = Color.red
+            }
       }
     , displayFooter model.mode
     ]

@@ -27,17 +27,19 @@ type Msg
   | CurrentTime Time
   | WindowSize Window.Size
   | OnAuthorized TwitchExt.Auth
+  | OnContext TwitchExt.Context
   | UI (View.Msg)
 
 type alias Model =
   { location : Location
-  , mode : Mode
   , login : Maybe String
   , userId : Maybe String
   , events : List Event
   , pendingRequests : List (Cmd Msg)
   , outstandingRequests : Int
   , time : Time
+  , mode : Mode
+  , theme : String
   , windowWidth : Int
   , windowHeight : Int
   }
@@ -57,9 +59,6 @@ init location =
     manchor = Debug.log "anchor" <| extractSearchArgument "anchor" location
   in
   ( { location = location
-    , mode = case manchor of
-        Just _ -> Extension
-        Nothing -> Page
     , login = mlogin
     , userId = muserId
     , events = []
@@ -73,6 +72,10 @@ init location =
       ]
     , outstandingRequests = 1
     , time = 0
+    , mode = case manchor of
+        Just _ -> Extension
+        Nothing -> Page
+    , theme = "dark"
     , windowWidth = 1000
     , windowHeight = 300
     }
@@ -141,6 +144,8 @@ update msg model =
           )
         Err _ ->
           (model, Cmd.none)
+    OnContext context ->
+      ( { model | theme = context.theme }, Cmd.none )
     UI (View.SetUsername username) ->
       ( { model
         | pendingRequests =
@@ -159,6 +164,7 @@ subscriptions model =
     , Time.every Time.minute CurrentTime
     , Window.resizes WindowSize
     , TwitchExt.onAuthorized OnAuthorized
+    , TwitchExt.onContext OnContext
     ]
 
 fetchUserByNameUrl : String -> String
