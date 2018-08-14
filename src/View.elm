@@ -1,4 +1,4 @@
-module View exposing (Msg(..), view)
+module View exposing (Msg(..), Mode(..), view)
 
 import ScheduleGraph exposing (..)
 
@@ -14,11 +14,17 @@ import Color
 type Msg
   = SetUsername String
 
+type Mode
+  = Page
+  | Extension
+
 css = """
 body {
   background-color: rgb(23, 20, 31);
   color: rgb(218, 216, 222);
 }
+h2 { text-align: center; margin: 0;}
+footer { position: fixed; bottom: 0;}
 svg.icon {
   display: inline-block;
   width: 1em;
@@ -38,14 +44,20 @@ a:hover, a:active { color: rgb(218, 216, 222); }
 view model = 
   div []
     [ node "style" [] [ text css ]
-    , label [ for "channelname" ] [ text "Channel Name " ]
-    , input
-      [ type_ "text"
-      , id "channelname"
-      , name "channelname"
-      , placeholder (Maybe.withDefault "" model.login)
-      , on "change" <| targetValue Json.Decode.string SetUsername
-      ] []
+    , case model.mode of
+      Page -> 
+        div []
+          [ label [ for "channelname" ] [ text "Channel Name " ]
+          , input
+            [ type_ "text"
+            , id "channelname"
+            , name "channelname"
+            , placeholder (Maybe.withDefault "" model.login)
+            , on "change" <| targetValue Json.Decode.string SetUsername
+            ] []
+          ]
+      Extension ->
+        h2 [] [ text "Historical Schedule" ]
     , scheduleGraph
       [ Html.Attributes.style
         [ ("width", "98%")
@@ -53,7 +65,7 @@ view model =
         ]
       ]
       { width = (toFloat model.windowWidth)
-      , height = (toFloat model.windowHeight) - 60
+      , height = (toFloat model.windowHeight) - 30
       , time = model.time
       , days = allDays
       , events = List.filter (\e -> e.duration < (56 * 60 * 60 * 1000)) model.events
@@ -65,17 +77,23 @@ view model =
         , currentTimeColor = Color.red
         }
       }
-    , displayFooter
+    , displayFooter model.mode
     ]
 
-displayFooter : Html msg
-displayFooter =
+displayFooter : Mode -> Html msg
+displayFooter mode =
   footer []
-  [ a [ href "https://github.com/JustinLove/schedule-from-videos" ]
-    [ icon "github", text "schedule-from-videos" ]
+  [ case mode of
+    Page ->
+      a [ href "https://github.com/JustinLove/schedule-from-videos" ]
+        [ icon "github", text "schedule-from-videos" ]
+    Extension -> text ""
   , text " "
-  , a [ href "https://twitter.com/wondible" ]
-    [ icon "twitter", text "@wondible" ]
+  , case mode of
+    Page ->
+      a [ href "https://twitter.com/wondible" ]
+        [ icon "twitter", text "@wondible" ]
+    Extension -> text ""
   , text " "
   , a [ href "https://twitch.tv/wondible" ]
     [ icon "twitch", text "wondible" ]

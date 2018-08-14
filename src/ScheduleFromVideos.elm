@@ -5,7 +5,7 @@ import Twitch.Helix as Helix
 import TwitchExt
 import TwitchId
 import ScheduleGraph exposing (Event)
-import View
+import View exposing (Mode(..))
 
 import Html
 import Navigation exposing (Location)
@@ -31,6 +31,7 @@ type Msg
 
 type alias Model =
   { location : Location
+  , mode : Mode
   , login : Maybe String
   , userId : Maybe String
   , events : List Event
@@ -53,8 +54,12 @@ init location =
   let
     mlogin = Debug.log "Login" <| extractSearchArgument "login" location
     muserId = Debug.log "userId" <| extractSearchArgument "userId" location
+    manchor = Debug.log "anchor" <| extractSearchArgument "anchor" location
   in
   ( { location = location
+    , mode = case manchor of
+        Just _ -> Extension
+        Nothing -> Page
     , login = mlogin
     , userId = muserId
     , events = []
