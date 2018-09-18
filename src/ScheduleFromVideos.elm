@@ -13,6 +13,8 @@ import Browser.Events
 import Browser.Navigation as Navigation
 import Html
 import Url exposing (Url)
+import Url.Parser
+import Url.Parser.Query
 import Http
 import Time exposing (Posix, Zone)
 import Task
@@ -233,15 +235,6 @@ fetchVideos userId =
 
 extractSearchArgument : String -> Url -> Maybe String
 extractSearchArgument key location =
-  location.query
-    |> Maybe.withDefault ""
-    |> String.split "&"
-    |> List.map (String.split "=")
-    |> List.filter (\x -> case List.head x of
-      Just s ->
-        (String.toLower s) == (String.toLower key)
-      Nothing ->
-        False)
-    |> List.head
-    |> Maybe.andThen List.tail
-    |> Maybe.andThen List.head
+  { location | path = "" }
+    |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string key))
+    |> Maybe.withDefault Nothing
