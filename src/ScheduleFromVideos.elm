@@ -7,58 +7,68 @@ import TwitchId
 import ScheduleGraph exposing (Event)
 import View exposing (Mode(..))
 
+import Browser
+import Browser.Dom as Dom
+import Browser.Events
+import Browser.Navigation as Navigation
 import Html
-import Navigation exposing (Location)
+import Url exposing (Url)
 import Http
-import Time exposing (Time)
+import Time exposing (Posix, Zone)
 import Task
-import Window
 
 requestLimit = 100
 rateLimit = 30
-requestRate = 60*Time.second/rateLimit
+requestRate = 60*1000/rateLimit
 
 type Msg
   = User (Result Http.Error (List Helix.User))
   | Videos (Result Http.Error (List Helix.Video))
   | Response Msg
-  | NextRequest Time
-  | CurrentUrl Location
-  | CurrentTime Time
-  | WindowSize Window.Size
+  | NextRequest Posix
+  | CurrentUrl Url
+  | Navigate Browser.UrlRequest
+  | CurrentTime Posix
+  | CurrentZone Zone
+  | WindowSize (Int, Int)
   | OnAuthorized TwitchExt.Auth
   | OnContext TwitchExt.Context
   | UI (View.Msg)
 
 type alias Model =
-  { location : Location
+  { location : Url
+  , navigationKey : Navigation.Key
   , login : Maybe String
   , userId : Maybe String
   , events : List Event
   , pendingRequests : List (Cmd Msg)
   , outstandingRequests : Int
-  , time : Time
+  , time : Posix
+  , zone : Zone
   , mode : Mode
   , theme : String
   , windowWidth : Int
   , windowHeight : Int
   }
 
-main = Navigation.program CurrentUrl
+main = Browser.application
   { init = init
+  , view = View.document UI
   , update = update
   , subscriptions = subscriptions
-  , view = (\model -> Html.map UI (View.view model))
+  , onUrlRequest = Navigate
+  , onUrlChange = CurrentUrl
   }
 
-init : Location -> (Model, Cmd Msg)
-init location =
+init : () -> Url -> Navigation.Key -> (Model, Cmd Msg)
+init flags location key =
   let
     mlogin = Debug.log "Login" <| extractSearchArgument "login" location
     muserId = Debug.log "userId" <| extractSearchArgument "userId" location
     manchor = Debug.log "anchor" <| extractSearchArgument "anchor" location
   in
   ( { location = location
+    , navigationKey = key
     , login = mlogin
     , userId = muserId
     , events = []
@@ -71,7 +81,8 @@ init location =
             Nothing -> Cmd.none
       ]
     , outstandingRequests = 1
-    , time = 0
+    , time = Time.millisToPosix 0
+    , zone = Time.utc
     , mode = case manchor of
         Just _ -> Extension
         Nothing -> Page
@@ -81,7 +92,10 @@ init location =
     }
   , Cmd.batch
     [ Task.perform CurrentTime Time.now
-    , Task.perform WindowSize Window.size
+    , Task.perform CurrentZone Time.here
+    , Dom.getViewport
+      |> Task.map (\viewport -> (round viewport.viewport.width, round viewport.viewport.height))
+      |> Task.perform WindowSize
     ]
   )
 
@@ -95,7 +109,7 @@ update msg model =
           [fetchVideos user.id]
         }
       , if (Just user.id) /= model.userId then
-          Navigation.modifyUrl (model.location.pathname ++ "?userId="  ++ user.id)
+          Navigation.pushUrl model.navigationKey (model.location.path ++ "?userId="  ++ user.id)
         else
           Cmd.none
       )
@@ -128,13 +142,21 @@ update msg model =
         _ -> (model, Cmd.none)
     CurrentUrl location ->
       ( { model | location = location }, Cmd.none)
+    Navigate (Browser.Internal url) ->
+      ( {model | location = url}
+      , Navigation.pushUrl model.navigationKey (Url.toString url)
+      )
+    Navigate (Browser.External url) ->
+      (model, Navigation.load url)
     CurrentTime time ->
       ( {model | time = time}, Cmd.none)
-    WindowSize size ->
-      ( {model | windowWidth = size.width, windowHeight = size.height}, Cmd.none)
+    CurrentZone zone ->
+      ( {model | zone = zone}, Cmd.none)
+    WindowSize (width, height) ->
+      ( {model | windowWidth = width, windowHeight = height}, Cmd.none)
     OnAuthorized auth ->
       case String.toInt auth.channelId of
-        Ok _ ->
+        Just _ ->
           ( { model
             | userId = Just auth.channelId
             , pendingRequests = List.append model.pendingRequests
@@ -142,7 +164,7 @@ update msg model =
             }
           , Cmd.none
           )
-        Err _ ->
+        Nothing ->
           (model, Cmd.none)
     OnContext context ->
       ( { model | theme = context.theme }, Cmd.none )
@@ -161,8 +183,8 @@ subscriptions model =
         Sub.none
       else
         Time.every (requestRate*1.05) NextRequest
-    , Time.every Time.minute CurrentTime
-    , Window.resizes WindowSize
+    , Time.every (60 * 1000) CurrentTime
+    , Browser.Events.onResize (\w h -> WindowSize (w, h))
     , TwitchExt.onAuthorized OnAuthorized
     , TwitchExt.onContext OnContext
     ]
@@ -209,10 +231,10 @@ fetchVideos userId =
     , url = (fetchVideosUrl userId)
     }
 
-extractSearchArgument : String -> Location -> Maybe String
+extractSearchArgument : String -> Url -> Maybe String
 extractSearchArgument key location =
-  location.search
-    |> String.dropLeft 1
+  location.query
+    |> Maybe.withDefault ""
     |> String.split "&"
     |> List.map (String.split "=")
     |> List.filter (\x -> case List.head x of

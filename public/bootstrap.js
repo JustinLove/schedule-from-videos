@@ -1,4 +1,4 @@
-var app = Elm.ScheduleFromVideos.fullscreen()
+var app = Elm.ScheduleFromVideos.init()
 
 if (window.Twitch && window.Twitch.ext) {
   window.Twitch.ext.onAuthorized(function(auth) {

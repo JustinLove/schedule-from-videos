@@ -1,4 +1,4 @@
-module View exposing (Msg(..), Mode(..), view)
+module View exposing (Msg(..), Mode(..), document, view)
 
 import ScheduleGraph exposing (..)
 
@@ -7,7 +7,6 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (on)
 import Svg exposing (svg, use)
 import Svg.Attributes exposing (xlinkHref)
-import Date exposing (Day(..))
 import Json.Decode
 import Color
 
@@ -54,6 +53,12 @@ svg.icon {
 .light a:hover, .light a:active { color: rgb(218, 216, 222); }
 """
 
+
+document tagger model =
+  { title = "Schedule From Videos"
+  , body = [Html.map tagger (view model)]
+  }
+
 view model = 
   div [ id "top", class model.theme ]
     [ node "style" [] [ text css ]
@@ -72,10 +77,8 @@ view model =
       Extension ->
         h2 [] [ text "Historical Schedule" ]
     , scheduleGraph
-      [ Html.Attributes.style
-        [ ("width", "98%")
-        , ("height", "auto")
-        ]
+      [ Html.Attributes.style "width" "98%"
+      , Html.Attributes.style "height" "auto"
       ]
       { width = (toFloat model.windowWidth)
       , height = (toFloat model.windowHeight) - (case model.mode of
@@ -83,21 +86,22 @@ view model =
           Extension -> 28
         )
       , time = model.time
+      , zone = model.zone
       , days = allDays
       , events = List.filter (\e -> e.duration < (56 * 60 * 60 * 1000)) model.events
       , style =
         case model.theme of 
           "light" ->
             { dataColor = Color.rgb 100 65 164
-            , labelColor = Color.greyscale 0.5
-            , ruleColor = Color.greyscale 0.3
+            , labelColor = Color.rgb 127 127 127
+            , ruleColor = Color.rgb 76 76 76
             , currentDayColor = Color.red
             , currentTimeColor = Color.red
             }
           _ ->
             { dataColor = Color.rgb 100 65 164
-            , labelColor = Color.greyscale 0.5
-            , ruleColor = Color.greyscale 0.7
+            , labelColor = Color.rgb 127 127 127
+            , ruleColor = Color.rgb 178 178 178
             , currentDayColor = Color.red
             , currentTimeColor = Color.red
             }
