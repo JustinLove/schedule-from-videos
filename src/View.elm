@@ -94,14 +94,14 @@ view model =
           "light" ->
             { dataColor = Color.rgb 100 65 164
             , labelColor = Color.rgb 127 127 127
-            , ruleColor = Color.rgb 76 76 76
+            , ruleColor = Color.rgb 178 178 178
             , currentDayColor = Color.red
             , currentTimeColor = Color.red
             }
           _ ->
             { dataColor = Color.rgb 100 65 164
             , labelColor = Color.rgb 127 127 127
-            , ruleColor = Color.rgb 178 178 178
+            , ruleColor = Color.rgb 76 76 76
             , currentDayColor = Color.red
             , currentTimeColor = Color.red
             }
