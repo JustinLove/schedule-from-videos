@@ -31,6 +31,11 @@ svg.icon {
   stroke: currentColor;
   fill: currentColor;
 }
+svg text { animation: appear 1s; }
+@keyframes appear {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
 
 #top.dark {
   background-color: #301c2b;
