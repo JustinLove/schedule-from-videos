@@ -32,6 +32,7 @@ svg.icon {
   fill: currentColor;
 }
 svg text { animation: appear 1s; }
+svg polyline { animation: appear 1s; }
 @keyframes appear {
   0% { opacity: 0; }
   100% { opacity: 1; }

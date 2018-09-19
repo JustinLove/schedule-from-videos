@@ -149,8 +149,11 @@ rowHeatMap style zone ((first, range) as timeRange) events =
   events
     |> toRanges zone timeRange
     |> List.map (\(start, duration, age) ->
-      rectangle (duration / day) 0.1
-        |> filled (uniform style.dataColor)
+      let
+        width = duration / day
+      in
+      segment (-0.5*width, 0) (0.5*width, 0)
+        |> traced (solid 0.1 (uniform style.dataColor))
         |> opacity 0.9
         |> shiftX (((start + duration/2) / day) - 0.5)
         |> shiftY ((age / (toFloat range)) - 0.5)
