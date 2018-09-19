@@ -1,11 +1,12 @@
-module ScheduleGraph exposing (ScheduleGraph, Style, Event, scheduleGraph, allDays)
+module ScheduleGraph exposing (ScheduleGraph, Style, Event, scheduleGraph, allDays, dayName)
 
-import Html exposing (Html)
 import Collage exposing (..)
 import Collage.Layout as Layout exposing (..)
 import Collage.Text as Text exposing (..)
 import Collage.Render
 import Color exposing (Color)
+import Dict exposing (Dict)
+import Html exposing (Html)
 import Svg
 import Svg.Attributes
 import Time exposing
@@ -20,6 +21,7 @@ import Time exposing
 type alias ScheduleGraph =
   { width : Float
   , height : Float
+  , labelWidths : Dict String Float
   , time : Posix
   , zone : Zone
   , days : List Weekday
@@ -85,7 +87,7 @@ numberPad i =
     String.fromInt i
 
 scheduleGraph : List (Svg.Attribute msg) -> ScheduleGraph -> Html msg
-scheduleGraph attributes {width, height, time, zone, events, days, style} =
+scheduleGraph attributes {width, height, labelWidths, time, zone, events, days, style} =
   let
     even = height / (toFloat (List.length days) + 1)
     axis = min even (min (height/4) (width / 15))
@@ -100,7 +102,7 @@ scheduleGraph attributes {width, height, time, zone, events, days, style} =
         >> scaleX width
         >> scaleY row
         )
-      |> List.map2 (contextDecorations style zone time) days
+      |> List.map2 (contextDecorations labelWidths style zone time) days
       |> vertical
       |> align top
     , displayScale zone timeRange style width height axis
@@ -157,12 +159,17 @@ rowHeatMap style zone ((first, range) as timeRange) events =
     |> group
     |> setEnvelope 1 1
 
-contextDecorations : Style -> Zone -> Posix -> Weekday -> Collage msg -> Collage msg
-contextDecorations style zone time dow collage =
+contextDecorations : Dict String Float -> Style -> Zone -> Posix -> Weekday -> Collage msg -> Collage msg
+contextDecorations labelWidths style zone time dow collage =
   let
     width = Layout.width collage
     height = Layout.height collage
     mark = max 1 (logBase 10 width)
+    text = dayName dow
+    size = min height (width / 3)
+    labelWidth = Dict.get text labelWidths
+      |> Maybe.withDefault (toFloat (String.length text))
+      |> (\x -> x * size * 0.5)
   in
   [ if dayStripe dow then
       rectangle width height
@@ -176,11 +183,11 @@ contextDecorations style zone time dow collage =
       )
   , collage
     |> scaleY 0.8
-  , (fromString <| dayName dow)
-    |> Text.size (round <| min height (width / 3))
+  , (fromString <| text)
+    |> Text.size (round size)
     |> Text.color style.labelColor
     |> rendered
-    |> align left
+    |> shiftX labelWidth -- align left, if it worked
     |> shiftX (-0.5 * width + 5)
   , (if (Time.toWeekday zone time) == dow then
       (segment (0.5 * width, 0) (-0.5 * width, 0)

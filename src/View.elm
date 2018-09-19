@@ -85,6 +85,7 @@ view model =
           Page -> 20
           Extension -> 28
         )
+      , labelWidths = model.labelWidths
       , time = model.time
       , zone = model.zone
       , days = allDays

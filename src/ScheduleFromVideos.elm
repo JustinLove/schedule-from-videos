@@ -1,5 +1,6 @@
 module ScheduleFromVideos exposing (..)
 
+import MeasureText
 import Twitch.Helix.Decode as Helix
 import Twitch.Helix as Helix
 import TwitchExt
@@ -11,6 +12,7 @@ import Browser
 import Browser.Dom as Dom
 import Browser.Events
 import Browser.Navigation as Navigation
+import Dict exposing (Dict)
 import Html
 import Url exposing (Url)
 import Url.Parser
@@ -33,6 +35,7 @@ type Msg
   | CurrentTime Posix
   | CurrentZone Zone
   | WindowSize (Int, Int)
+  | TextSize MeasureText.TextSize
   | OnAuthorized TwitchExt.Auth
   | OnContext TwitchExt.Context
   | UI (View.Msg)
@@ -51,6 +54,7 @@ type alias Model =
   , theme : String
   , windowWidth : Int
   , windowHeight : Int
+  , labelWidths : Dict String Float
   }
 
 main = Browser.application
@@ -91,6 +95,7 @@ init flags location key =
     , theme = "dark"
     , windowWidth = 1000
     , windowHeight = 300
+    , labelWidths = Dict.empty
     }
   , Cmd.batch
     [ Task.perform CurrentTime Time.now
@@ -98,6 +103,10 @@ init flags location key =
     , Dom.getViewport
       |> Task.map (\viewport -> (round viewport.viewport.width, round viewport.viewport.height))
       |> Task.perform WindowSize
+    , ScheduleGraph.allDays
+      |> List.map ScheduleGraph.dayName
+      |> List.map (\name -> MeasureText.getTextWidth {font = "1px sans-serif", text = name})
+      |> Cmd.batch
     ]
   )
 
@@ -156,6 +165,8 @@ update msg model =
       ( {model | zone = zone}, Cmd.none)
     WindowSize (width, height) ->
       ( {model | windowWidth = width, windowHeight = height}, Cmd.none)
+    TextSize {text, width} ->
+      ( {model | labelWidths = Dict.insert text width model.labelWidths}, Cmd.none)
     OnAuthorized auth ->
       case String.toInt auth.channelId of
         Just _ ->
@@ -189,6 +200,7 @@ subscriptions model =
     , Browser.Events.onResize (\w h -> WindowSize (w, h))
     , TwitchExt.onAuthorized OnAuthorized
     , TwitchExt.onContext OnContext
+    , MeasureText.textSize TextSize
     ]
 
 fetchUserByNameUrl : String -> String
