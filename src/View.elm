@@ -18,7 +18,7 @@ type Mode
   | Extension
 
 css = """
-body { margin: 0; }
+body { margin: 0; overflow: hidden; }
 #top { padding: 8px; }
 h2 { text-align: center; margin: 0;}
 footer { position: fixed; bottom: 0;}
@@ -68,6 +68,10 @@ document tagger model =
 view model = 
   div [ id "top", class model.theme ]
     [ node "style" [] [ text css ]
+    , node "style" [] [ text <| case model.theme of
+      "light" -> "body { background-color: #fff; }"
+      _ -> "body { background-color: #301c2b; }"
+      ]
     , case model.mode of
       Page -> 
         div []
@@ -83,13 +87,14 @@ view model =
       Extension ->
         h2 [] [ text "Historical Schedule" ]
     , scheduleGraph
-      [ Html.Attributes.style "width" "98%"
+      [ Html.Attributes.style "width" "100%"
       , Html.Attributes.style "height" "auto"
+      , Html.Attributes.id "graph"
       ]
       { width = (toFloat model.windowWidth)
       , height = (toFloat model.windowHeight) - (case model.mode of
-          Page -> 20
-          Extension -> 28
+          Page -> 32
+          Extension -> 40
         )
       , labelWidths = model.labelWidths
       , time = model.time
