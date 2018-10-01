@@ -233,7 +233,7 @@ fetchUserById id =
 
 fetchVideosUrl : String -> String
 fetchVideosUrl userId =
-  "https://api.twitch.tv/helix/videos?first=100&user_id=" ++ userId
+  "https://api.twitch.tv/helix/videos?first=100&type=archive&user_id=" ++ userId
 
 fetchVideos : String -> Cmd Msg
 fetchVideos userId =
