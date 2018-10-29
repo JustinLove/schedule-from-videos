@@ -93,7 +93,7 @@ init flags location key =
         Just _ -> Extension
         Nothing -> Page
     , theme = "dark"
-    , windowWidth = 1000
+    , windowWidth = 320
     , windowHeight = 300
     , labelWidths = Dict.empty
     }
