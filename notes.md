@@ -1,4 +1,3 @@
-- text measurement not working in firefox
 - window size not received on first load in iframe (twitch dev rig)
 - exceptions (from elm?) on first load in iframe
 

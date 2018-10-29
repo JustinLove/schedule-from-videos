@@ -105,7 +105,7 @@ init flags location key =
       |> Task.perform WindowSize
     , ScheduleGraph.allDays
       |> List.map ScheduleGraph.dayName
-      |> List.map (\name -> MeasureText.getTextWidth {font = "1px sans-serif", text = name})
+      |> List.map (\name -> MeasureText.getTextWidth {font = "100px sans-serif", text = name})
       |> Cmd.batch
     ]
   )
@@ -166,7 +166,7 @@ update msg model =
     WindowSize (width, height) ->
       ( {model | windowWidth = width, windowHeight = height}, Cmd.none)
     TextSize {text, width} ->
-      ( {model | labelWidths = Dict.insert text width model.labelWidths}, Cmd.none)
+      ( {model | labelWidths = Dict.insert text (width/100) model.labelWidths}, Cmd.none)
     OnAuthorized auth ->
       case String.toInt auth.channelId of
         Just _ ->
