@@ -31,10 +31,15 @@ svg.icon {
   stroke: currentColor;
   fill: currentColor;
 }
-svg text { animation: appear 1s; }
+svg text { animation: delay-appear 2s; }
 svg polyline { animation: appear 1s; }
 @keyframes appear {
   0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes delay-appear {
+  0% { opacity: 0; }
+  50% { opacity: 0; }
   100% { opacity: 1; }
 }
 

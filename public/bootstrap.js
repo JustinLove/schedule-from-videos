@@ -32,7 +32,7 @@ let getTextWidth = function getTextWidth(params) {
 
 app.ports.getTextWidth.subscribe(getTextWidth)
 
-tryToGetValidCanvas(1000)
+tryToGetValidCanvas(16)
 
 if (window.Twitch && window.Twitch.ext) {
   window.Twitch.ext.onAuthorized(function onAuthorized(auth) {
