@@ -21,15 +21,9 @@ import Http
 import Time exposing (Posix, Zone)
 import Task
 
-requestLimit = 100
-rateLimit = 30
-requestRate = 60*1000/rateLimit
-
 type Msg
   = User (Result Http.Error (List Helix.User))
   | Videos (Result Http.Error (List Helix.Video))
-  | Response Msg
-  | NextRequest Posix
   | CurrentUrl Url
   | Navigate Browser.UrlRequest
   | CurrentTime Posix
@@ -47,8 +41,6 @@ type alias Model =
   , login : Maybe String
   , userId : Maybe String
   , events : List Event
-  , pendingRequests : List (Cmd Msg)
-  , outstandingRequests : Int
   , time : Posix
   , zone : Zone
   , mode : Mode
@@ -80,15 +72,6 @@ init flags location key =
     , login = mlogin
     , userId = muserId
     , events = []
-    , pendingRequests = [
-      case muserId of
-        Just id -> fetchUserById TwitchId.clientId id
-        Nothing ->
-          case mlogin of
-            Just login -> fetchUserByName TwitchId.clientId login
-            Nothing -> Cmd.none
-      ]
-    , outstandingRequests = 1
     , time = Time.millisToPosix 0
     , zone = Time.utc
     , mode = case manchor of
@@ -109,6 +92,12 @@ init flags location key =
       |> List.map ScheduleGraph.dayName
       |> List.map (\name -> MeasureText.getTextWidth {font = "100px sans-serif", text = name})
       |> Cmd.batch
+    , case muserId of
+        Just id -> fetchUserById TwitchId.clientId id
+        Nothing ->
+          case mlogin of
+            Just login -> fetchUserByName TwitchId.clientId login
+            Nothing -> Cmd.none
     ]
   )
 
@@ -118,13 +107,14 @@ update msg model =
       ( { model
         | login = Just user.login
         , userId = Just user.id
-        , pendingRequests = List.append model.pendingRequests
-          [fetchVideos model.clientId user.id]
         }
-      , if (Just user.id) /= model.userId then
-          Navigation.pushUrl model.navigationKey (model.location.path ++ "?userId="  ++ user.id)
-        else
-          Cmd.none
+      , Cmd.batch
+        [ fetchVideos model.clientId user.id
+        , if (Just user.id) /= model.userId then
+            Navigation.pushUrl model.navigationKey (model.location.path ++ "?userId="  ++ user.id)
+          else
+            Cmd.none
+        ]
       )
     User (Ok _) ->
       let _ = Debug.log "user did not find that login name" "" in
@@ -143,16 +133,6 @@ update msg model =
     Videos (Err error) ->
       let _ = Debug.log "video fetch error" error in
       (model, Cmd.none)
-    Response subMsg ->
-      update subMsg { model | outstandingRequests = model.outstandingRequests - 1}
-    NextRequest _ ->
-      case model.pendingRequests of
-        next :: rest ->
-          ( { model
-            | pendingRequests = rest
-            , outstandingRequests = model.outstandingRequests + (if next == Cmd.none then 0 else 1)
-            }, next)
-        _ -> (model, Cmd.none)
     CurrentUrl location ->
       ( { model | location = location }, Cmd.none)
     Navigate (Browser.Internal url) ->
@@ -175,31 +155,21 @@ update msg model =
           ( { model
             | clientId = auth.clientId
             , userId = Just auth.channelId
-            , pendingRequests = List.append model.pendingRequests
-              [fetchVideos auth.clientId auth.channelId]
             }
-          , Cmd.none
+          , fetchVideos auth.clientId auth.channelId
           )
         Nothing ->
           (model, Cmd.none)
     OnContext context ->
       ( { model | theme = context.theme }, Cmd.none )
     UI (View.SetUsername username) ->
-      ( { model
-        | pendingRequests =
-          List.append model.pendingRequests [fetchUserByName model.clientId username]
-        , events = []
-        }
-      , Cmd.none)
+      ( { model |events = [] }
+      , fetchUserByName model.clientId username)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
   Sub.batch
-    [ if List.isEmpty model.pendingRequests then
-        Sub.none
-      else
-        Time.every (requestRate*1.05) NextRequest
-    , Time.every (60 * 1000) CurrentTime
+    [ Time.every (60 * 1000) CurrentTime
     , Browser.Events.onResize (\w h -> WindowSize (w, h))
     , TwitchExt.onAuthorized OnAuthorized
     , TwitchExt.onContext OnContext
@@ -216,7 +186,7 @@ fetchUserByName clientId login =
     { clientId = clientId
     , auth = Nothing
     , decoder = Helix.users
-    , tagger = Response << User
+    , tagger = User
     , url = (fetchUserByNameUrl login)
     }
 
@@ -230,7 +200,7 @@ fetchUserById clientId id =
     { clientId = clientId
     , auth = Nothing
     , decoder = Helix.users
-    , tagger = Response << User
+    , tagger = User
     , url = (fetchUserByIdUrl id)
     }
 
@@ -244,7 +214,7 @@ fetchVideos clientId userId =
     { clientId = clientId
     , auth = Nothing
     , decoder = Helix.videos
-    , tagger = Response << Videos
+    , tagger = Videos
     , url = (fetchVideosUrl userId)
     }
 

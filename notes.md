@@ -13,4 +13,4 @@
 pwd developer-rig
 
 `yarn host -d ..\schedule-from-videos\public -p 8080 -l`
-`yarn start -l ..\schedule-from-videos.json`
+`yarn start -l ..\schedule-from-videos.json -c ../config.json`
