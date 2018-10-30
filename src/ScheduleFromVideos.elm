@@ -43,6 +43,7 @@ type Msg
 type alias Model =
   { location : Url
   , navigationKey : Navigation.Key
+  , clientId : String
   , login : Maybe String
   , userId : Maybe String
   , events : List Event
@@ -75,15 +76,16 @@ init flags location key =
   in
   ( { location = location
     , navigationKey = key
+    , clientId = TwitchId.clientId
     , login = mlogin
     , userId = muserId
     , events = []
     , pendingRequests = [
       case muserId of
-        Just id -> fetchUserById id
+        Just id -> fetchUserById TwitchId.clientId id
         Nothing ->
           case mlogin of
-            Just login -> fetchUserByName login
+            Just login -> fetchUserByName TwitchId.clientId login
             Nothing -> Cmd.none
       ]
     , outstandingRequests = 1
@@ -117,7 +119,7 @@ update msg model =
         | login = Just user.login
         , userId = Just user.id
         , pendingRequests = List.append model.pendingRequests
-          [fetchVideos user.id]
+          [fetchVideos model.clientId user.id]
         }
       , if (Just user.id) /= model.userId then
           Navigation.pushUrl model.navigationKey (model.location.path ++ "?userId="  ++ user.id)
@@ -171,9 +173,10 @@ update msg model =
       case String.toInt auth.channelId of
         Just _ ->
           ( { model
-            | userId = Just auth.channelId
+            | clientId = auth.clientId
+            , userId = Just auth.channelId
             , pendingRequests = List.append model.pendingRequests
-              [fetchVideos auth.channelId]
+              [fetchVideos auth.clientId auth.channelId]
             }
           , Cmd.none
           )
@@ -184,7 +187,7 @@ update msg model =
     UI (View.SetUsername username) ->
       ( { model
         | pendingRequests =
-          List.append model.pendingRequests [fetchUserByName username]
+          List.append model.pendingRequests [fetchUserByName model.clientId username]
         , events = []
         }
       , Cmd.none)
@@ -207,10 +210,10 @@ fetchUserByNameUrl : String -> String
 fetchUserByNameUrl login =
   "https://api.twitch.tv/helix/users?login=" ++ login
 
-fetchUserByName : String -> Cmd Msg
-fetchUserByName login =
+fetchUserByName : String -> String -> Cmd Msg
+fetchUserByName clientId login =
   Helix.send <|
-    { clientId = TwitchId.clientId
+    { clientId = clientId
     , auth = Nothing
     , decoder = Helix.users
     , tagger = Response << User
@@ -221,10 +224,10 @@ fetchUserByIdUrl : String -> String
 fetchUserByIdUrl id =
   "https://api.twitch.tv/helix/users?id=" ++ id
 
-fetchUserById : String -> Cmd Msg
-fetchUserById id =
+fetchUserById : String -> String -> Cmd Msg
+fetchUserById clientId id =
   Helix.send <|
-    { clientId = TwitchId.clientId
+    { clientId = clientId
     , auth = Nothing
     , decoder = Helix.users
     , tagger = Response << User
@@ -235,10 +238,10 @@ fetchVideosUrl : String -> String
 fetchVideosUrl userId =
   "https://api.twitch.tv/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : String -> Cmd Msg
-fetchVideos userId =
+fetchVideos : String -> String -> Cmd Msg
+fetchVideos clientId userId =
   Helix.send <|
-    { clientId = TwitchId.clientId
+    { clientId = clientId
     , auth = Nothing
     , decoder = Helix.videos
     , tagger = Response << Videos
