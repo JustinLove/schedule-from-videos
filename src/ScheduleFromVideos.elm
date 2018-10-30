@@ -62,9 +62,9 @@ main = Browser.application
 init : () -> Url -> Navigation.Key -> (Model, Cmd Msg)
 init flags location key =
   let
-    mlogin = Debug.log "Login" <| extractSearchArgument "login" location
-    muserId = Debug.log "userId" <| extractSearchArgument "userId" location
-    manchor = Debug.log "anchor" <| extractSearchArgument "anchor" location
+    mlogin = extractSearchArgument "login" location
+    muserId = extractSearchArgument "userId" location
+    manchor = extractSearchArgument "anchor" location
   in
   ( { location = location
     , navigationKey = key
