@@ -12,6 +12,7 @@ import Color
 
 type Msg
   = SetUsername String
+  | SetGamename String
 
 type Mode
   = Page
@@ -87,6 +88,15 @@ view model =
             , name "channelname"
             , placeholder (Maybe.withDefault "" model.login)
             , on "change" <| targetValue Json.Decode.string SetUsername
+            ] []
+          , text " "
+          , label [ for "gamename" ] [ text "Game Name " ]
+          , input
+            [ type_ "text"
+            , id "gamename"
+            , name "gamename"
+            , placeholder (Maybe.withDefault "" Nothing)
+            , on "change" <| targetValue Json.Decode.string SetGamename
             ] []
           ]
       Extension ->

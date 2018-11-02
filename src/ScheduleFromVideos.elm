@@ -23,6 +23,7 @@ import Task
 
 type Msg
   = User (Result Http.Error (List Helix.User))
+  | Game (Result Http.Error (List Helix.Game))
   | Videos (Result Http.Error (List Helix.Video))
   | CurrentUrl Url
   | Navigate Browser.UrlRequest
@@ -109,7 +110,7 @@ update msg model =
         , userId = Just user.id
         }
       , Cmd.batch
-        [ fetchVideos model.clientId user.id
+        [ fetchVideosByUser model.clientId user.id
         , if (Just user.id) /= model.userId then
             Navigation.pushUrl model.navigationKey (model.location.path ++ "?userId="  ++ user.id)
           else
@@ -121,6 +122,17 @@ update msg model =
       (model, Cmd.none)
     User (Err error) ->
       let _ = Debug.log "user fetch error" error in
+      (model, Cmd.none)
+    Game (Ok (game::_)) ->
+      ( model
+       
+      , Cmd.none
+      )
+    Game (Ok _) ->
+      let _ = Debug.log "game did not find that name" "" in
+      (model, Cmd.none)
+    Game (Err error) ->
+      let _ = Debug.log "game fetch error" error in
       (model, Cmd.none)
     Videos (Ok videos) ->
       ( { model
@@ -156,15 +168,18 @@ update msg model =
             | clientId = auth.clientId
             , userId = Just auth.channelId
             }
-          , fetchVideos auth.clientId auth.channelId
+          , fetchVideosByUser auth.clientId auth.channelId
           )
         Nothing ->
           (model, Cmd.none)
     OnContext context ->
       ( { model | theme = context.theme }, Cmd.none )
     UI (View.SetUsername username) ->
-      ( { model |events = [] }
+      ( { model | events = [] }
       , fetchUserByName model.clientId username)
+    UI (View.SetGamename gamename) ->
+      ( { model | events = [] }
+      , fetchGameByName model.clientId gamename)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -190,6 +205,20 @@ fetchUserByName clientId login =
     , url = (fetchUserByNameUrl login)
     }
 
+fetchGameByNameUrl : String -> String
+fetchGameByNameUrl name =
+  "https://api.twitch.tv/helix/games?name=" ++ name
+
+fetchGameByName : String -> String -> Cmd Msg
+fetchGameByName clientId name =
+  Helix.send <|
+    { clientId = clientId
+    , auth = Nothing
+    , decoder = Helix.games
+    , tagger = Game
+    , url = (fetchGameByNameUrl name)
+    }
+
 fetchUserByIdUrl : String -> String
 fetchUserByIdUrl id =
   "https://api.twitch.tv/helix/users?id=" ++ id
@@ -204,18 +233,18 @@ fetchUserById clientId id =
     , url = (fetchUserByIdUrl id)
     }
 
-fetchVideosUrl : String -> String
-fetchVideosUrl userId =
+fetchVideosByUserUrl : String -> String
+fetchVideosByUserUrl userId =
   "https://api.twitch.tv/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : String -> String -> Cmd Msg
-fetchVideos clientId userId =
+fetchVideosByUser : String -> String -> Cmd Msg
+fetchVideosByUser clientId userId =
   Helix.send <|
     { clientId = clientId
     , auth = Nothing
     , decoder = Helix.videos
     , tagger = Videos
-    , url = (fetchVideosUrl userId)
+    , url = (fetchVideosByUserUrl userId)
     }
 
 extractSearchArgument : String -> Url -> Maybe String
