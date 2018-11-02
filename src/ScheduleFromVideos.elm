@@ -41,6 +41,8 @@ type alias Model =
   , clientId : String
   , login : Maybe String
   , userId : Maybe String
+  , gamename : Maybe String
+  , gameId : Maybe String
   , events : List Event
   , time : Posix
   , zone : Zone
@@ -72,6 +74,8 @@ init flags location key =
     , clientId = TwitchId.clientId
     , login = mlogin
     , userId = muserId
+    , gamename = Nothing
+    , gameId = Nothing
     , events = []
     , time = Time.millisToPosix 0
     , zone = Time.utc
@@ -124,9 +128,13 @@ update msg model =
       let _ = Debug.log "user fetch error" error in
       (model, Cmd.none)
     Game (Ok (game::_)) ->
-      ( model
-       
-      , Cmd.none
+      ( { model
+        | gamename = Just game.name
+        , gameId = Just game.id
+        }
+      , Cmd.batch
+        [ fetchVideosByGame model.clientId game.id
+        ]
       )
     Game (Ok _) ->
       let _ = Debug.log "game did not find that name" "" in
@@ -245,6 +253,20 @@ fetchVideosByUser clientId userId =
     , decoder = Helix.videos
     , tagger = Videos
     , url = (fetchVideosByUserUrl userId)
+    }
+
+fetchVideosByGameUrl : String -> String
+fetchVideosByGameUrl gameId =
+  "https://api.twitch.tv/helix/videos?first=100&type=archive&game_id=" ++ gameId
+
+fetchVideosByGame : String -> String -> Cmd Msg
+fetchVideosByGame clientId gameId =
+  Helix.send <|
+    { clientId = clientId
+    , auth = Nothing
+    , decoder = Helix.videos
+    , tagger = Videos
+    , url = (fetchVideosByGameUrl gameId)
     }
 
 extractSearchArgument : String -> Url -> Maybe String
