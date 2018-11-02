@@ -15,6 +15,7 @@ import Browser.Navigation as Navigation
 import Dict exposing (Dict)
 import Html
 import Url exposing (Url)
+import Url.Builder as Url
 import Url.Parser
 import Url.Parser.Query
 import Http
@@ -67,6 +68,8 @@ init flags location key =
   let
     mlogin = extractSearchArgument "login" location
     muserId = extractSearchArgument "userId" location
+    mgamename = extractSearchArgument "gamename" location
+    mgameId = extractSearchArgument "gameId" location
     manchor = extractSearchArgument "anchor" location
   in
   ( { location = location
@@ -74,8 +77,8 @@ init flags location key =
     , clientId = TwitchId.clientId
     , login = mlogin
     , userId = muserId
-    , gamename = Nothing
-    , gameId = Nothing
+    , gamename = mgamename
+    , gameId = mgameId
     , events = []
     , time = Time.millisToPosix 0
     , zone = Time.utc
@@ -98,25 +101,35 @@ init flags location key =
       |> List.map (\name -> MeasureText.getTextWidth {font = "100px sans-serif", text = name})
       |> Cmd.batch
     , case muserId of
-        Just id -> fetchUserById TwitchId.clientId id
+        Just userId -> fetchUserById TwitchId.clientId userId
         Nothing ->
           case mlogin of
             Just login -> fetchUserByName TwitchId.clientId login
-            Nothing -> Cmd.none
+            Nothing ->
+              case mgameId of
+                Just gameId -> fetchGameById TwitchId.clientId gameId
+                Nothing ->
+                  case mgamename of
+                    Just gamename -> fetchGameByName TwitchId.clientId gamename
+                    Nothing -> Cmd.none
     ]
   )
 
 update msg model =
   case msg of
     User (Ok (user::_)) ->
-      ( { model
-        | login = Just user.login
-        , userId = Just user.id
-        }
+      let
+        m2 =
+          { model
+          | login = Just user.login
+          , userId = Just user.id
+          }
+      in
+      ( m2
       , Cmd.batch
         [ fetchVideosByUser model.clientId user.id
         , if (Just user.id) /= model.userId then
-            Navigation.pushUrl model.navigationKey (model.location.path ++ "?userId="  ++ user.id)
+            Navigation.pushUrl model.navigationKey (createPath m2)
           else
             Cmd.none
         ]
@@ -128,12 +141,20 @@ update msg model =
       let _ = Debug.log "user fetch error" error in
       (model, Cmd.none)
     Game (Ok (game::_)) ->
-      ( { model
-        | gamename = Just game.name
-        , gameId = Just game.id
-        }
+      let
+        m2 =
+          { model
+          | gamename = Just game.name
+          , gameId = Just game.id
+          }
+      in
+      ( m2
       , Cmd.batch
         [ fetchVideosByGame model.clientId game.id
+        , if (Just game.id) /= model.gameId then
+            Navigation.pushUrl model.navigationKey (createPath m2)
+          else
+            Cmd.none
         ]
       )
     Game (Ok _) ->
@@ -213,6 +234,20 @@ fetchUserByName clientId login =
     , url = (fetchUserByNameUrl login)
     }
 
+fetchUserByIdUrl : String -> String
+fetchUserByIdUrl id =
+  "https://api.twitch.tv/helix/users?id=" ++ id
+
+fetchUserById : String -> String -> Cmd Msg
+fetchUserById clientId id =
+  Helix.send <|
+    { clientId = clientId
+    , auth = Nothing
+    , decoder = Helix.users
+    , tagger = User
+    , url = (fetchUserByIdUrl id)
+    }
+
 fetchGameByNameUrl : String -> String
 fetchGameByNameUrl name =
   "https://api.twitch.tv/helix/games?name=" ++ name
@@ -227,19 +262,20 @@ fetchGameByName clientId name =
     , url = (fetchGameByNameUrl name)
     }
 
-fetchUserByIdUrl : String -> String
-fetchUserByIdUrl id =
-  "https://api.twitch.tv/helix/users?id=" ++ id
+fetchGameByIdUrl : String -> String
+fetchGameByIdUrl id =
+  "https://api.twitch.tv/helix/games?id=" ++ id
 
-fetchUserById : String -> String -> Cmd Msg
-fetchUserById clientId id =
+fetchGameById : String -> String -> Cmd Msg
+fetchGameById clientId id =
   Helix.send <|
     { clientId = clientId
     , auth = Nothing
-    , decoder = Helix.users
-    , tagger = User
-    , url = (fetchUserByIdUrl id)
+    , decoder = Helix.games
+    , tagger = Game
+    , url = (fetchGameByIdUrl id)
     }
+
 
 fetchVideosByUserUrl : String -> String
 fetchVideosByUserUrl userId =
@@ -274,3 +310,17 @@ extractSearchArgument key location =
   { location | path = "" }
     |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string key))
     |> Maybe.withDefault Nothing
+
+
+createQueryString : Model -> List Url.QueryParameter
+createQueryString model =
+  [ Maybe.map (Url.string "userId") model.userId
+  , Maybe.map (Url.string "login") model.login
+  , Maybe.map (Url.string "gameId") model.gameId
+  , Maybe.map (Url.string "gamename") model.gamename
+  ]
+    |> List.filterMap identity
+
+createPath : Model -> String
+createPath model =
+  Url.relative [] (createQueryString model)

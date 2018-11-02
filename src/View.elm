@@ -95,7 +95,7 @@ view model =
             [ type_ "text"
             , id "gamename"
             , name "gamename"
-            , placeholder (Maybe.withDefault "" Nothing)
+            , placeholder (Maybe.withDefault "" model.gamename)
             , on "change" <| targetValue Json.Decode.string SetGamename
             ] []
           ]
