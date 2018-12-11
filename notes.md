@@ -1,3 +1,8 @@
+- Twitch recommends user friendly error handling
+
+[10:54:27] <wtfblub> not a big issue but the extension "Dark Reader" breaks the loading of your schedule from videos
+
+
 - window size not received on first load in iframe (twitch dev rig)
 - exceptions (from elm?) on first load in iframe
 
