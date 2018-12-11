@@ -1,3 +1,4 @@
 elm-stuff
 src/TwitchId.elm
 public/schedule-from-videos.js
+public/config/config.js
