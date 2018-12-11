@@ -12,10 +12,11 @@
 - color coding game/topic? - data not available
 - timezones?
 
+https://wondible.com/schedule-from-videos/
+https://localhost.rig.twitch.tv:8080/
 
 ## Extension rig
 
 pwd developer-rig
 
-`yarn host -d ../../../Documents/schedule-from-videos/public -p 8080 -l`
-`yarn start -l ..\schedule-from-videos.json -c ../config.json`
+`yarn start`
