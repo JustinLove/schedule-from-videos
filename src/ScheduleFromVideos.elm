@@ -6,7 +6,7 @@ import Twitch.Helix as Helix
 import TwitchExt
 import TwitchId
 import ScheduleGraph exposing (Event)
-import View exposing (Mode(..))
+import View exposing (Mode(..), Data(..))
 
 import Browser
 import Browser.Dom as Dom
@@ -39,8 +39,8 @@ type alias Model =
   { location : Url
   , navigationKey : Navigation.Key
   , clientId : String
-  , login : Maybe String
-  , userId : Maybe String
+  , login : Data String
+  , userId : Data String
   , events : List Event
   , time : Posix
   , zone : Zone
@@ -70,8 +70,8 @@ init flags location key =
   ( { location = location
     , navigationKey = key
     , clientId = TwitchId.clientId
-    , login = mlogin
-    , userId = muserId
+    , login = mlogin |> Maybe.map Data |> Maybe.withDefault Unknown
+    , userId = muserId |> Maybe.map Data |> Maybe.withDefault Unknown
     , events = []
     , time = Time.millisToPosix 0
     , zone = Time.utc
@@ -110,12 +110,12 @@ update msg model =
   case msg of
     UserForName (Ok (user::_)) ->
       ( { model
-        | login = Just user.login
-        , userId = Just user.id
+        | login = Data user.login
+        , userId = Data user.id
         }
       , Cmd.batch
         [ fetchVideos model.clientId user.id
-        , if (Just user.id) /= model.userId then
+        , if (Data user.id) /= model.userId then
             Navigation.pushUrl model.navigationKey (model.location.path ++ "?userId="  ++ user.id)
           else
             Cmd.none
@@ -123,23 +123,23 @@ update msg model =
       )
     UserForName (Ok _) ->
       let _ = Debug.log "user did not find that login name" "" in
-      (model, Cmd.none)
+      ({ model | login = NotFound, userId = Unknown }, Cmd.none)
     UserForName (Err error) ->
       let _ = Debug.log "user fetch error" error in
-      (model, Cmd.none)
+      ({ model | login = RequestFailed, userId = Unknown }, Cmd.none)
     UserForId (Ok (user::_)) ->
       ( { model
-        | login = Just user.login
-        , userId = Just user.id
+        | login = Data user.login
+        , userId = Data user.id
         }
       , Cmd.none
       )
     UserForId (Ok _) ->
       let _ = Debug.log "user did not find that user id" "" in
-      (model, Cmd.none)
+      ({ model | login = Unknown, userId = NotFound }, Cmd.none)
     UserForId (Err error) ->
       let _ = Debug.log "user fetch error" error in
-      (model, Cmd.none)
+      ({ model | login = Unknown, userId = RequestFailed }, Cmd.none)
     Videos (Ok videos) ->
       ( { model
         | events = videos
@@ -172,7 +172,7 @@ update msg model =
         Just _ ->
           ( { model
             | clientId = auth.clientId
-            , userId = Just auth.channelId
+            , userId = Data auth.channelId
             }
           , fetchVideos auth.clientId auth.channelId
           )

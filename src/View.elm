@@ -1,4 +1,4 @@
-module View exposing (Msg(..), Mode(..), document, view)
+module View exposing (Msg(..), Mode(..), Data(..), document, view)
 
 import ScheduleGraph exposing (..)
 
@@ -16,6 +16,12 @@ type Msg
 type Mode
   = Page
   | Extension
+
+type Data a
+  = Data a
+  | Unknown
+  | NotFound
+  | RequestFailed
 
 css = """
 body { margin: 0; overflow: hidden; }
@@ -85,9 +91,25 @@ view model =
             [ type_ "text"
             , id "channelname"
             , name "channelname"
-            , placeholder (Maybe.withDefault "" model.login)
+            , placeholder (case model.login of
+                Data login -> login
+                Unknown -> ""
+                NotFound -> ""
+                RequestFailed -> ""
+              )
             , on "change" <| targetValue Json.Decode.string SetUsername
             ] []
+          , text " "
+          , case model.login of
+            Data _ -> text ""
+            Unknown -> text ""
+            NotFound -> text "Channel name not found."
+            RequestFailed -> text "Twitch API request failed."
+          , case model.userId of
+            Data _ -> text ""
+            Unknown -> text ""
+            NotFound -> text "Channel ID not found."
+            RequestFailed -> text "Twitch API request failed."
           ]
       Extension ->
         h2 [] [ text "Historical Schedule" ]
