@@ -41,7 +41,7 @@ type alias Model =
   , clientId : String
   , login : Data String
   , userId : Data String
-  , events : List Event
+  , events : Data (List Event)
   , time : Posix
   , zone : Zone
   , mode : Mode
@@ -72,7 +72,7 @@ init flags location key =
     , clientId = TwitchId.clientId
     , login = mlogin |> Maybe.map Data |> Maybe.withDefault Unknown
     , userId = muserId |> Maybe.map Data |> Maybe.withDefault Unknown
-    , events = []
+    , events = Unknown
     , time = Time.millisToPosix 0
     , zone = Time.utc
     , mode = case manchor of
@@ -122,10 +122,8 @@ update msg model =
         ]
       )
     UserForName (Ok _) ->
-      let _ = Debug.log "user did not find that login name" "" in
       ({ model | login = NotFound, userId = Unknown }, Cmd.none)
     UserForName (Err error) ->
-      let _ = Debug.log "user fetch error" error in
       ({ model | login = RequestFailed, userId = Unknown }, Cmd.none)
     UserForId (Ok (user::_)) ->
       ( { model
@@ -135,22 +133,22 @@ update msg model =
       , Cmd.none
       )
     UserForId (Ok _) ->
-      let _ = Debug.log "user did not find that user id" "" in
       ({ model | login = Unknown, userId = NotFound }, Cmd.none)
     UserForId (Err error) ->
-      let _ = Debug.log "user fetch error" error in
       ({ model | login = Unknown, userId = RequestFailed }, Cmd.none)
     Videos (Ok videos) ->
       ( { model
         | events = videos
           |> List.filter (\v -> v.videoType == Helix.Archive)
           |> List.map (\v -> {start = v.createdAt, duration = v.duration})
+          |> Data
         }
       , Cmd.none
       )
+    Videos (Err (Http.BadStatus 503)) ->
+      ({ model | events = NotFound }, Cmd.none)
     Videos (Err error) ->
-      let _ = Debug.log "video fetch error" error in
-      (model, Cmd.none)
+      ({ model | events = RequestFailed }, Cmd.none)
     CurrentUrl location ->
       ( { model | location = location }, Cmd.none)
     Navigate (Browser.Internal url) ->
@@ -181,7 +179,7 @@ update msg model =
     OnContext context ->
       ( { model | theme = context.theme }, Cmd.none )
     UI (View.SetUsername username) ->
-      ( { model |events = [] }
+      ( { model |events = Unknown }
       , fetchUserByName model.clientId username)
 
 subscriptions : Model -> Sub Msg

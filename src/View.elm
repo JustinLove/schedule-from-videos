@@ -27,6 +27,7 @@ css = """
 body { margin: 0; overflow: hidden; }
 #top { padding: 8px; }
 h2 { text-align: center; margin: 0;}
+.error-message { text-align: center; margin-top: 2em; }
 footer { position: fixed; bottom: 0;}
 svg.icon {
   display: inline-block;
@@ -113,40 +114,59 @@ view model =
           ]
       Extension ->
         h2 [] [ text "Historical Schedule" ]
-    , scheduleGraph
-      [ Html.Attributes.style "width" "100%"
-      , Html.Attributes.style "height" "auto"
-      , Html.Attributes.id "graph"
-      ]
-      { width = (toFloat model.windowWidth)
-      , height = (toFloat model.windowHeight) - (case model.mode of
-          Page -> 32
-          Extension -> 40
-        )
-      , labelWidths = model.labelWidths
-      , time = model.time
-      , zone = model.zone
-      , days = allDays
-      , events = List.filter (\e -> e.duration < (56 * 60 * 60 * 1000)) model.events
-      , style =
-        case model.theme of 
-          "light" ->
-            { dataColor = Color.rgb 100 65 164
-            , labelColor = Color.rgb 127 127 127
-            , ruleColor = Color.rgb 178 178 178
-            , currentDayColor = Color.red
-            , currentTimeColor = Color.red
-            }
-          _ ->
-            { dataColor = Color.rgb 100 65 164
-            , labelColor = Color.rgb 127 127 127
-            , ruleColor = Color.rgb 76 76 76
-            , currentDayColor = Color.red
-            , currentTimeColor = Color.red
-            }
-      }
+    , case model.events of
+      Data events ->
+        displayGraph model (List.filter (\e -> e.duration < (56 * 60 * 60 * 1000)) events)
+      Unknown ->
+        displayGraph model []
+      NotFound ->
+        div [ class "error-message" ]
+          [ h2 [] [ text "User ID Not Found" ]
+          , p [] [ text "If you got this as url, it is most likely a copy-paste error." ]
+          ]
+      RequestFailed ->
+        div [ class "error-message" ]
+          [ h2 [] [ text "Video Request Failed" ]
+          , p [] [ text "Twitch API request failed." ]
+          ]
     , displayFooter model.mode
     ]
+
+--displayGraph : Model -> List Event -> Html msg
+displayGraph model events =
+  scheduleGraph
+    [ Html.Attributes.style "width" "100%"
+    , Html.Attributes.style "height" "auto"
+    , Html.Attributes.id "graph"
+    ]
+    { width = (toFloat model.windowWidth)
+    , height = (toFloat model.windowHeight) - (case model.mode of
+        Page -> 32
+        Extension -> 40
+      )
+    , labelWidths = model.labelWidths
+    , time = model.time
+    , zone = model.zone
+    , days = allDays
+    , events = events
+    , style =
+      case model.theme of 
+        "light" ->
+          { dataColor = Color.rgb 100 65 164
+          , labelColor = Color.rgb 127 127 127
+          , ruleColor = Color.rgb 178 178 178
+          , currentDayColor = Color.red
+          , currentTimeColor = Color.red
+          }
+        _ ->
+          { dataColor = Color.rgb 100 65 164
+          , labelColor = Color.rgb 127 127 127
+          , ruleColor = Color.rgb 76 76 76
+          , currentDayColor = Color.red
+          , currentTimeColor = Color.red
+          }
+    }
+
 
 displayFooter : Mode -> Html msg
 displayFooter mode =
