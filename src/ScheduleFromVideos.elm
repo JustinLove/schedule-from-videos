@@ -22,7 +22,8 @@ import Time exposing (Posix, Zone)
 import Task
 
 type Msg
-  = User (Result Http.Error (List Helix.User))
+  = UserForName (Result Http.Error (List Helix.User))
+  | UserForId (Result Http.Error (List Helix.User))
   | Videos (Result Http.Error (List Helix.Video))
   | CurrentUrl Url
   | Navigate Browser.UrlRequest
@@ -93,7 +94,11 @@ init flags location key =
       |> List.map (\name -> MeasureText.getTextWidth {font = "100px sans-serif", text = name})
       |> Cmd.batch
     , case muserId of
-        Just id -> fetchUserById TwitchId.clientId id
+        Just id ->
+          Cmd.batch
+            [ fetchUserById TwitchId.clientId id
+            , fetchVideos TwitchId.clientId id
+            ]
         Nothing ->
           case mlogin of
             Just login -> fetchUserByName TwitchId.clientId login
@@ -103,7 +108,7 @@ init flags location key =
 
 update msg model =
   case msg of
-    User (Ok (user::_)) ->
+    UserForName (Ok (user::_)) ->
       ( { model
         | login = Just user.login
         , userId = Just user.id
@@ -116,10 +121,23 @@ update msg model =
             Cmd.none
         ]
       )
-    User (Ok _) ->
+    UserForName (Ok _) ->
       let _ = Debug.log "user did not find that login name" "" in
       (model, Cmd.none)
-    User (Err error) ->
+    UserForName (Err error) ->
+      let _ = Debug.log "user fetch error" error in
+      (model, Cmd.none)
+    UserForId (Ok (user::_)) ->
+      ( { model
+        | login = Just user.login
+        , userId = Just user.id
+        }
+      , Cmd.none
+      )
+    UserForId (Ok _) ->
+      let _ = Debug.log "user did not find that user id" "" in
+      (model, Cmd.none)
+    UserForId (Err error) ->
       let _ = Debug.log "user fetch error" error in
       (model, Cmd.none)
     Videos (Ok videos) ->
@@ -186,7 +204,7 @@ fetchUserByName clientId login =
     { clientId = clientId
     , auth = Nothing
     , decoder = Helix.users
-    , tagger = User
+    , tagger = UserForName
     , url = (fetchUserByNameUrl login)
     }
 
@@ -200,7 +218,7 @@ fetchUserById clientId id =
     { clientId = clientId
     , auth = Nothing
     , decoder = Helix.users
-    , tagger = User
+    , tagger = UserForId
     , url = (fetchUserByIdUrl id)
     }
 
