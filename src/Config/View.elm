@@ -65,13 +65,25 @@ view model =
 displayFooter : Html msg
 displayFooter =
   footer []
-    [ a [ href "https://github.com/JustinLove/schedule-from-videos" ]
+    [ a
+      [ href "https://github.com/JustinLove/schedule-from-videos"
+      , target "_blank"
+      , rel "noopener"
+      ]
       [ icon "github", text "schedule-from-videos" ]
     , text " "
-    , a [ href "https://twitter.com/wondible" ]
+    , a
+      [ href "https://twitter.com/wondible"
+      , target "_blank"
+      , rel "noopener"
+      ]
       [ icon "twitter", text "@wondible" ]
     , text " "
-    , a [ href "https://twitch.tv/wondible" ]
+    , a
+      [ href "https://twitch.tv/wondible"
+      , target "_blank"
+      , rel "noopener"
+      ]
       [ icon "twitch", text "wondible" ]
     ]
 
