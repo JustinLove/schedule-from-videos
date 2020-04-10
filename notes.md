@@ -1,3 +1,4 @@
+- https://obsproject.com/tools/browser-drag-and-drop
 - Twitch recommends user friendly error handling
 
 [10:54:27] <wtfblub> not a big issue but the extension "Dark Reader" breaks the loading of your schedule from videos
