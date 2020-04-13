@@ -65,6 +65,23 @@ var fetchToken = function(callback) {
   req.end()
 }
 
+var ensureToken = function(callback) {
+  if (currentAccessTokenResponse) {
+    callback(null, currentAccessTokenResponse.access_token)
+  } else {
+    fetchToken(function(err, token) {
+      if (err) {
+        console.error(err)
+        return callback(err)
+      }
+
+      currentAccessTokenResponse = token
+
+      callback(null, currentAccessTokenResponse.access_token)
+    })
+  }
+}
+
 var fetchVideos = function(auth, userId, callback) {
   const req = https.request({
     hostname: apiHostname,
@@ -102,7 +119,7 @@ var fetchVideos = function(auth, userId, callback) {
 
 var receiveVideos = function(err, videos, callback) {
   if (err) {
-    console.err(err)
+    console.error(err)
     return callback(err)
   }
 
@@ -120,15 +137,12 @@ var receiveVideos = function(err, videos, callback) {
 }
 
 var requestVideos = function(userId, callback) {
-  fetchToken(function(err, token) {
-    if (err) {
-      console.error(err)
-      return callback(err)
-    }
+  ensureToken(function(err, auth) {
+    if (err) return callback(err)
 
-    currentAccessTokenResponse = token
+    fetchVideos(auth, userId, function(error, videos) {
+      if (error) return callback(error)
 
-    fetchVideos(token.access_token, userId, function(err, videos) {
       receiveVideos(err, videos, callback)
     });
   })
@@ -142,7 +156,7 @@ var main = function() {
   requestVideos('56623426', function(err, response) {
     if (err) {
       console.error(err)
-      return callback(err)
+      return
     }
   })
 }
