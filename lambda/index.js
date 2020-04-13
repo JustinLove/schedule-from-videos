@@ -100,6 +100,25 @@ var fetchVideos = function(auth, userId, callback) {
   req.end()
 }
 
+var receiveVideos = function(err, videos, callback) {
+  if (err) {
+    console.err(err)
+    return callback(err)
+  }
+
+  //console.log(videos)
+  var events = videos.data.filter(function(video) {
+    return video.type == 'archive'
+  }).map(function(video) {
+    return {
+      created_at: video.created_at,
+      duration: video.duration,
+    }
+  })
+  console.log(events)
+  callback(null, videos)
+}
+
 var requestVideos = function(userId, callback) {
   fetchToken(function(err, token) {
     if (err) {
@@ -109,15 +128,9 @@ var requestVideos = function(userId, callback) {
 
     currentAccessTokenResponse = token
 
-    fetchVideos(token.access_token, userId, function(error, videos) {
-      if (error) {
-        console.error(error)
-        return callback(error)
-      }
-
-      console.log(videos)
-      callback(null, videos)
-    })
+    fetchVideos(token.access_token, userId, function(err, videos) {
+      receiveVideos(err, videos, callback)
+    });
   })
 }
 
