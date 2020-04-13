@@ -15,7 +15,7 @@ const tokenPath = "/oauth2/token"
   + "&grant_type=client_credentials"
 
 const apiHostname = "api.twitch.tv"
-const videosPath = "/helix/videos?first=100&type=archive&user_id="
+const videosPath = "/helix/videos?first=1&type=archive&user_id="
 
 const standardHeaders = {
   "User-Agent": "Schedule From Videos Lambda",
@@ -143,8 +143,8 @@ var receiveVideos = function(err, videos, callback) {
       duration: video.duration,
     }
   })
-  console.log(events)
-  callback(null, videos)
+  //console.log(events)
+  callback(null, events)
 }
 
 var requestVideos = function(userId, callback) {
@@ -152,7 +152,18 @@ var requestVideos = function(userId, callback) {
     if (err) return callback(err)
 
     fetchVideos(auth, userId, function(error, videos) {
-      receiveVideos(error, videos, done)
+      receiveVideos(error, videos, function(err2, events) {
+        if (err) return done(err)
+        done(null, {
+          statusCode: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            events: events,
+          }),
+        })
+      })
     });
   })
 }
@@ -167,6 +178,8 @@ var main = function() {
       console.error(err)
       return
     }
+
+    console.log(response)
   })
 }
 
