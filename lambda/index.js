@@ -6,6 +6,7 @@ const clientSecret = process.env['TWITCH_CLIENT_SECRET'];
 const https = require('https')
 
 var currentAccessTokenResponse = null
+//var currentAccessTokenResponse = {access_token: 'xxxx'}
 
 const tokenHostname = "id.twitch.tv"
 const tokenPath = "/oauth2/token"
@@ -65,20 +66,30 @@ var fetchToken = function(callback) {
   req.end()
 }
 
-var ensureToken = function(callback) {
-  if (currentAccessTokenResponse) {
-    callback(null, currentAccessTokenResponse.access_token)
-  } else {
+var ensureToken = function(finalCallback, tryCallback) {
+  var lastTry = function() {
     fetchToken(function(err, token) {
       if (err) {
         console.error(err)
-        return callback(err)
+        return finalCallback(err)
       }
 
       currentAccessTokenResponse = token
 
-      callback(null, currentAccessTokenResponse.access_token)
+      tryCallback(null, currentAccessTokenResponse.access_token, finalCallback)
     })
+  }
+
+  if (currentAccessTokenResponse) {
+    tryCallback(null, currentAccessTokenResponse.access_token, function(err, result) {
+      if (err && err.status == 401) {
+        lastTry()
+      }
+
+      finalCallback(err, result)
+    })
+  } else {
+    lastTry()
   }
 }
 
@@ -137,13 +148,11 @@ var receiveVideos = function(err, videos, callback) {
 }
 
 var requestVideos = function(userId, callback) {
-  ensureToken(function(err, auth) {
+  ensureToken(callback, function(err, auth, done) {
     if (err) return callback(err)
 
     fetchVideos(auth, userId, function(error, videos) {
-      if (error) return callback(error)
-
-      receiveVideos(err, videos, callback)
+      receiveVideos(error, videos, done)
     });
   })
 }
