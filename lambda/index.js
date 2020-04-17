@@ -1,7 +1,32 @@
 'use strict';
 
-const clientId = process.env['TWITCH_CLIENT_ID'];
-const clientSecret = process.env['TWITCH_CLIENT_SECRET'];
+let clientId = process.env['TWITCH_CLIENT_ID'];
+let clientSecret = process.env['TWITCH_CLIENT_SECRET'];
+const clientIdEncrypted = process.env['TWITCH_CLIENT_ID_ENCRYPTED'];
+const clientSecretEncrypted = process.env['TWITCH_CLIENT_SECRET_ENCRYPTED'];
+let AWS
+
+if ((!clientId && clientIdEncrypted) || (!clientSecret && clientSecretEncrypted)) {
+  AWS = require('aws-sdk');
+}
+
+var decrypt = function(encrypted, callback) {
+  // Decrypt code should run once and variables stored outside of the
+  // function handler so that these are decrypted once per container
+  AWS.config.update({ region: 'us-east-1' });
+  const kms = new AWS.KMS();
+  try {
+    const req = { CiphertextBlob: Buffer.from(encrypted, 'base64') };
+    kms.decrypt(req, function(err, data) {
+      if (err) callback(err)
+      var decrypted = data.Plaintext.toString('ascii');
+      callback(null, decrypted)
+    })
+  } catch (err) {
+    console.log('Decrypt error:', err);
+    callback(err)
+  }
+};
 
 const https = require('https')
 
@@ -9,13 +34,9 @@ var currentAccessTokenResponse = null
 //var currentAccessTokenResponse = {access_token: 'xxxx'}
 
 const tokenHostname = "id.twitch.tv"
-const tokenPath = "/oauth2/token"
-  + "?client_id=" + clientId
-  + "&client_secret=" + clientSecret
-  + "&grant_type=client_credentials"
 
 const apiHostname = "api.twitch.tv"
-const videosPath = "/helix/videos?first=1&type=archive&user_id="
+const videosPath = "/helix/videos?first=100&type=archive&user_id="
 
 const standardHeaders = {
   "User-Agent": "Schedule From Videos Lambda",
@@ -32,6 +53,10 @@ var authHeaders = function(token) {
 
 
 var fetchToken = function(callback) {
+  const tokenPath = "/oauth2/token"
+    + "?client_id=" + clientId
+    + "&client_secret=" + clientSecret
+    + "&grant_type=client_credentials"
   const req = https.request({
     hostname: tokenHostname,
     path: tokenPath,
@@ -39,7 +64,7 @@ var fetchToken = function(callback) {
     headers: standardHeaders,
     timeout: 5000,
   }, function(res) {
-    console.log('token response', res.statusCode);
+    //console.log('token response', res.statusCode);
 
     let rawData = '';
     res.on('data', (chunk) => { rawData += chunk; });
@@ -101,7 +126,7 @@ var fetchVideos = function(auth, userId, callback) {
     headers: authHeaders(auth),
     timeout: 5000,
   }, function(res) {
-    console.log('videos response', res.statusCode);
+    //console.log('videos response', res.statusCode);
 
     let rawData = '';
     res.on('data', (chunk) => { rawData += chunk; });
@@ -155,32 +180,43 @@ var requestVideos = function(userId, callback) {
       receiveVideos(error, videos, function(err2, events) {
         if (err) return done(err)
         done(null, {
-          statusCode: 200,
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            events: events,
-          }),
+          events: events,
         })
       })
     });
   })
 }
 
-exports.handler = function(event, context, callback) {
-  callback(null, '');
+var withClientId = function(callback) {
+  if (!clientId && clientIdEncrypted) {
+    decrypt(clientIdEncrypted, function(err, result) {
+      if (err) return callback(err)
+      clientId = result
+      callback()
+    })
+  } else {
+    callback()
+  }
 }
 
-var main = function() {
-  requestVideos('56623426', function(err, response) {
-    if (err) {
-      console.error(err)
-      return
-    }
+var withClientSecret = function(callback) {
+  if (!clientSecret && clientSecretEncrypted) {
+    decrypt(clientSecretEncrypted, function(err, result) {
+      if (err) return callback(err)
+      clientSecret = result
+      callback()
+    })
+  } else {
+    callback()
+  }
+}
 
-    console.log(response)
+exports.handler = function(event, context, callback) {
+  withClientId(function(e1) {
+    if (e1) return callback(e1)
+    withClientSecret(function(e2) {
+      if (e2) return callback(e2)
+      requestVideos(event.user_id, callback)
+    })
   })
 }
-
-main()

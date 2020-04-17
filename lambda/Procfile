@@ -1,1 +1,1 @@
-lambda: node index.js
+lambda: node test.js
