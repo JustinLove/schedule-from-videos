@@ -18,7 +18,7 @@ var decrypt = function(encrypted, callback) {
   try {
     const req = { CiphertextBlob: Buffer.from(encrypted, 'base64') };
     kms.decrypt(req, function(err, data) {
-      if (err) callback(err)
+      if (err) return callback(err)
       var decrypted = data.Plaintext.toString('ascii');
       callback(null, decrypted)
     })
@@ -220,3 +220,7 @@ exports.handler = function(event, context, callback) {
     })
   })
 }
+
+const elm = require('./lambda')
+
+const app = elm.Elm.Lambda.init({flags: process.env});
