@@ -1,12 +1,14 @@
 module ScheduleFromVideos exposing (..)
 
+import Decode
 import MeasureText
-import Twitch.Helix.Decode as Helix
-import Twitch.Helix as Helix
 import TwitchExt
 import TwitchId
 import ScheduleGraph exposing (Event)
 import View exposing (Mode(..), Data(..))
+
+import Twitch.Helix.Decode as Helix
+import Twitch.Helix as Helix
 
 import Browser
 import Browser.Dom as Dom
@@ -24,7 +26,7 @@ import Task
 type Msg
   = UserForName (Result Http.Error (List Helix.User))
   | UserForId (Result Http.Error (List Helix.User))
-  | Videos (Result Http.Error (List Helix.Video))
+  | Videos (Result Http.Error (List Decode.Event))
   | CurrentUrl Url
   | Navigate Browser.UrlRequest
   | CurrentTime Posix
@@ -97,7 +99,7 @@ init flags location key =
         Just id ->
           Cmd.batch
             [ fetchUserById TwitchId.clientId id
-            , fetchVideos TwitchId.clientId id
+            , fetchVideos id
             ]
         Nothing ->
           case mlogin of
@@ -114,7 +116,7 @@ update msg model =
         , userId = Data user.id
         }
       , Cmd.batch
-        [ fetchVideos model.clientId user.id
+        [ fetchVideos user.id
         , if (Data user.id) /= model.userId then
             Navigation.pushUrl model.navigationKey (model.location.path ++ "?userId="  ++ user.id)
           else
@@ -139,7 +141,6 @@ update msg model =
     Videos (Ok videos) ->
       ( { model
         | events = videos
-          |> List.filter (\v -> v.videoType == Helix.Archive)
           |> List.map (\v -> {start = v.createdAt, duration = v.duration})
           |> Data
         }
@@ -172,7 +173,7 @@ update msg model =
             | clientId = auth.clientId
             , userId = Data auth.channelId
             }
-          , fetchVideos auth.clientId auth.channelId
+          , fetchVideos auth.channelId
           )
         Nothing ->
           (model, Cmd.none)
@@ -222,16 +223,13 @@ fetchUserById clientId id =
 
 fetchVideosUrl : String -> String
 fetchVideosUrl userId =
-  "https://api.twitch.tv/helix/videos?first=100&type=archive&user_id=" ++ userId
+  "https://nwsj6y4eah.execute-api.us-east-1.amazonaws.com/dev/videos/" ++ userId
 
-fetchVideos : String -> String -> Cmd Msg
-fetchVideos clientId userId =
-  Helix.send <|
-    { clientId = clientId
-    , auth = Nothing
-    , decoder = Helix.videos
-    , tagger = Videos
-    , url = (fetchVideosUrl userId)
+fetchVideos : String -> Cmd Msg
+fetchVideos userId =
+  Http.get
+    { url = (fetchVideosUrl userId)
+    , expect = Http.expectJson Videos Decode.events
     }
 
 extractSearchArgument : String -> Url -> Maybe String
