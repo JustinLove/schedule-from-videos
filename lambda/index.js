@@ -212,6 +212,11 @@ var withClientSecret = function(callback) {
 }
 
 exports.handler = function(event, context, callback) {
+  app.ports.lambdaEvent.send({
+    kind: 'lambdaEvent',
+    event: event,
+  })
+  /*
   withClientId(function(e1) {
     if (e1) return callback(e1)
     withClientSecret(function(e2) {
@@ -219,8 +224,22 @@ exports.handler = function(event, context, callback) {
       requestVideos(event.user_id, callback)
     })
   })
+  */
 }
 
-const elm = require('./lambda')
+const elm = require('./handler')
 
-const app = elm.Elm.Lambda.init({flags: process.env});
+const app = elm.Elm.Handler.init({flags: process.env});
+
+var command = function(message) {
+  //console.log(message)
+  switch (message.kind) {
+    default:
+      console.log('unknown message', message)
+      break;
+  }
+}
+
+if (app.ports.lambdaCommand) {
+  app.ports.lambdaCommand.subscribe(command)
+}

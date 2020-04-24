@@ -1,28 +1,40 @@
-module Lambda exposing (main)
+port module Lambda exposing
+  ( Event(..)
+  , event
+  , test
+  )
 
-import Env
-import Secret
+import Json.Decode as Decode exposing (Value)
+import Json.Encode as Encode
 
-import Json.Decode
-import Platform
+type Event
+  = Videos String
 
-type alias Model = Env.Env
-type alias Msg = ()
+event : (Result Decode.Error Event -> msg) -> Sub msg
+event tagger =
+  lambdaEvent (decodeEvent >> tagger)
 
-main = Platform.worker
-  { init = init
-  , update = update
-  , subscriptions = \model -> Sub.none
-  }
+decodeEvent : Value -> Result Decode.Error Event
+decodeEvent thing =
+  Decode.decodeValue eventDecoder thing
+    |> Result.mapError (Debug.log "lambda decode error")
 
-init : Json.Decode.Value -> (Model, Cmd msg)
-init flags =
-  case (Env.decode flags) of
-    Ok env -> (env, Cmd.none)
-    Err err -> Debug.todo ("env decode error" ++ (Debug.toString err))
+eventDecoder : Decode.Decoder Event
+eventDecoder =
+  (Decode.field "kind" Decode.string)
+    |> Decode.andThen(\kind ->
+      case kind of
+        "lambdaEvent" ->
+          Decode.map Videos (Decode.at ["event", "user_id"] Decode.string)
+        _ -> Decode.fail kind
+    )
 
-update : Msg -> Model -> (Model, Cmd Msg)
-update msg model = (model, Cmd.none)
+test : Cmd msg
+test =
+  Encode.object
+    [ ("kind", Encode.string "test")
+    ]
+    |> lambdaCommand
 
-subscriptions : Model -> Sub Msg
-subscriptions model = Sub.none
+port lambdaCommand : Value -> Cmd msg
+port lambdaEvent : (Value -> msg) -> Sub msg
