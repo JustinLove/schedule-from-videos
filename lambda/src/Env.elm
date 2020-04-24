@@ -1,15 +1,17 @@
 module Env exposing (Env(..), PlainEnv, EncryptedEnv, env, decode)
 
+import Secret exposing (Secret)
+
 import Json.Decode exposing (..)
 
 type alias PlainEnv =
-  { clientId : String
-  , clientSecret : String
+  { clientId : Secret
+  , clientSecret : Secret
   }
 
 type alias EncryptedEnv =
-  { clientId : String
-  , clientSecret : String
+  { clientId : Secret
+  , clientSecret : Secret
   }
 
 type Env
@@ -29,11 +31,15 @@ env =
 plainEnv : Decoder PlainEnv
 plainEnv =
   map2 PlainEnv
-    (field "TWITCH_CLIENT_ID" string)
-    (field "TWITCH_CLIENT_SECRET" string)
+    (field "TWITCH_CLIENT_ID" secret)
+    (field "TWITCH_CLIENT_SECRET" secret)
 
 encryptedEnv : Decoder EncryptedEnv
 encryptedEnv =
   map2 PlainEnv
-    (field "TWITCH_CLIENT_ID_ENCRYPTED" string)
-    (field "TWITCH_CLIENT_SECRET_ENCRYPTED" string)
+    (field "TWITCH_CLIENT_ID_ENCRYPTED" secret)
+    (field "TWITCH_CLIENT_SECRET_ENCRYPTED" secret)
+
+secret : Decoder Secret
+secret =
+  map Secret.fromString string

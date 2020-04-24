@@ -1,6 +1,7 @@
 module Lambda exposing (main)
 
 import Env
+import Secret
 
 import Json.Decode
 import Platform

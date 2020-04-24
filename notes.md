@@ -1,5 +1,7 @@
 - working plan: aws lambda, node
   - keys in environment vars
+  - starting elm
+    - passing env issue: can't print model with keys in model, can't print msg with decrtyped keys in msg. Keep keys in JS and apply in http handler? - pass as json.value? Opaque types?
 - https://obsproject.com/tools/browser-drag-and-drop
 - move day labels depending on data location?
 - note about display timezone
