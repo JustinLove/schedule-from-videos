@@ -16,7 +16,7 @@ type alias EncryptedEnv =
 
 type Env
   = Plain PlainEnv
-  | Encrypted PlainEnv
+  | Encrypted EncryptedEnv
 
 decode : Value -> Result Error Env
 decode = decodeValue env

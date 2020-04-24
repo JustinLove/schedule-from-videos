@@ -231,9 +231,61 @@ const elm = require('./handler')
 
 const app = elm.Elm.Handler.init({flags: process.env});
 
+var request = function(info) {
+  const req = https.request({
+    hostname: info.hostname,
+    path: info.path,
+    method: info.method,
+    headers: info.headers,
+    timeout: 5000,
+  }, function(res) {
+    console.log('request response', res.statusCode);
+
+    let rawData = '';
+    res.on('data', (chunk) => { rawData += chunk; });
+    res.on('end', () => {
+      try {
+        const parsedData = JSON.parse(rawData);
+        if (res.statusCode == 200) {
+          app.ports.lambdaEvent.send({
+            kind: 'response',
+            body: parsedData,
+          })
+        } else {
+          app.ports.lambdaEvent.send({
+            kind: 'badStatus',
+            status: res.statusCode,
+            body: parsedData,
+          })
+        }
+      } catch (e) {
+        console.error(e.message);
+        app.ports.lambdaEvent.send({
+          kind: 'badBody',
+          error: e,
+        })
+      }
+    });
+  })
+
+  req.on('error', function(err) {
+    console.error('request failed', err);
+    app.ports.lambdaEvent.send({
+      kind: 'networkError',
+      error: err,
+    })
+  })
+
+  req.end()
+}
+
+
 var command = function(message) {
   //console.log(message)
   switch (message.kind) {
+    case 'request':
+      request(message.request)
+      break;
     default:
       console.log('unknown message', message)
       break;
