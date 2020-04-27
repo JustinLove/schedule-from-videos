@@ -4,7 +4,8 @@ import Env exposing (Env)
 import Lambda
 import Secret exposing (Secret)
 
-import Twitch.Id.Decode as Decode
+import Twitch.Id.Decode as Id
+import Twitch.Helix.Decode as Helix
 
 import Json.Decode as Decode
 import Platform
@@ -48,16 +49,28 @@ update msg model =
         Just auth -> Debug.todo "reuse token"
       )
     Event (Ok (Lambda.Response "fetchToken" (Ok json))) ->
-      ( { model | auth = json
-          |> Decode.decodeValue Decode.appOAuth
+      let
+        auth = json
+          |> Decode.decodeValue Id.appOAuth
           |> Result.map (.accessToken>>Secret.fromString)
           |> Result.mapError (Debug.log "token decode error")
           |> Result.toMaybe
-        }
-      , Cmd.none
+      in
+      ( { model | auth = auth }
+      , fetchVideos model.env auth model.userId
       )
+    Event (Ok (Lambda.Response "fetchVideos" (Ok json))) ->
+      let
+        videos = json
+          |> Decode.decodeValue Helix.videos
+          |> Result.mapError (Debug.log "video decode error")
+          |> Result.withDefault []
+          |> List.filter (\v -> v.videoType == Helix.Archive)
+          |> Debug.log "videos"
+      in
+        (model, Cmd.none)
     Event (Ok (Lambda.Response tag (Ok json))) ->
-      let _ = Debug.log tag json in
+      let _ = Debug.log ("unknown response " ++ tag) json in
       (model, Cmd.none)
     Event (Ok (Lambda.Response tag (Err err))) ->
       let _ = Debug.log ("http error " ++ tag) err in
@@ -70,9 +83,25 @@ standardHeaders =
   [ Lambda.header "User-Agent" "Schedule From Videos Lambda"
   ]
 
+oauthHeaders : Env -> Maybe Secret -> List Lambda.Header
+oauthHeaders env auth =
+  case (env, auth) of
+    (Env.Encrypted _, _) ->
+      Debug.todo "decrypt env"
+    (_, Nothing) ->
+      Debug.todo "not authenticated"
+    (Env.Plain {clientId}, Just token) ->
+      twitchHeaders (Secret.toString clientId) (Secret.toString token)
+        |> List.append standardHeaders
+
+twitchHeaders : String -> String -> List Lambda.Header
+twitchHeaders clientId token =
+  [ Lambda.header "Client-ID" clientId
+  , Lambda.header "Authorization" ("Bearer "++token)
+  ]
+
 --tokenHostname = "localhost"
 tokenHostname = "id.twitch.tv"
-
 
 tokenPath : Env -> String
 tokenPath env =
@@ -94,6 +123,25 @@ fetchToken env =
     , headers = standardHeaders
     , tag = "fetchToken"
     }
+
+helixHostname = "api.twitch.tv"
+
+videosPath : String -> String
+videosPath userId =
+  "/helix/videos?first=100&type=archive&user_id=" ++ userId
+
+fetchVideos : Env -> Maybe Secret -> Maybe String -> Cmd Msg
+fetchVideos env auth muserId=
+  case muserId of
+    Nothing -> Cmd.none
+    Just userId ->
+      Lambda.request
+        { hostname = helixHostname
+        , path = Debug.log "path" <| videosPath userId
+        , method = "GET"
+        , headers = oauthHeaders env auth
+        , tag = "fetchVideos"
+        }
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Lambda.event Event

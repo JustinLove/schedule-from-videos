@@ -253,6 +253,7 @@ var request = function(info) {
             body: parsedData,
           })
         } else {
+          console.log(parsedData)
           app.ports.lambdaEvent.send({
             kind: 'badStatus',
             tag: info.tag,

@@ -8,10 +8,12 @@
     "dependencies": {
         "direct": {
             "elm/core": "1.0.5",
-            "elm/json": "1.1.3"
+            "elm/json": "1.1.3",
+            "elm/parser": "1.1.0",
+            "elm/time": "1.0.0",
+            "rtfeldman/elm-iso8601-date-strings": "1.1.3"
         },
-        "indirect": {
-        }
+        "indirect": {}
     },
     "test-dependencies": {
         "direct": {},

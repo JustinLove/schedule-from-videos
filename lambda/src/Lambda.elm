@@ -10,7 +10,7 @@ import Json.Decode as Decode exposing (Value)
 import Json.Encode as Encode
 
 type HttpError
-  = BadStatus Int
+  = BadStatus Int Value
   | BadBody String
   | NetworkError
 
@@ -44,8 +44,11 @@ eventDecoder =
         "badStatus" ->
           Decode.map2 Response
             (Decode.field "tag" Decode.string)
-            (Decode.map (Err<<BadStatus)
-              (Decode.field "status" Decode.int)
+            (Decode.map Err
+              (Decode.map2 BadStatus
+                (Decode.field "status" Decode.int)
+                (Decode.field "body" Decode.value)
+              )
             )
         "badBody" ->
           Decode.map2 Response
