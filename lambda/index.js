@@ -239,7 +239,7 @@ var request = function(info) {
     headers: info.headers,
     timeout: 5000,
   }, function(res) {
-    console.log('request response', res.statusCode);
+    console.log('request response', info.tag, res.statusCode);
 
     let rawData = '';
     res.on('data', (chunk) => { rawData += chunk; });
@@ -249,11 +249,13 @@ var request = function(info) {
         if (res.statusCode == 200) {
           app.ports.lambdaEvent.send({
             kind: 'response',
+            tag: info.tag,
             body: parsedData,
           })
         } else {
           app.ports.lambdaEvent.send({
             kind: 'badStatus',
+            tag: info.tag,
             status: res.statusCode,
             body: parsedData,
           })
@@ -262,6 +264,7 @@ var request = function(info) {
         console.error(e.message);
         app.ports.lambdaEvent.send({
           kind: 'badBody',
+          tag: info.tag,
           error: e,
         })
       }
@@ -272,6 +275,7 @@ var request = function(info) {
     console.error('request failed', err);
     app.ports.lambdaEvent.send({
       kind: 'networkError',
+      tag: info.tag,
       error: err,
     })
   })

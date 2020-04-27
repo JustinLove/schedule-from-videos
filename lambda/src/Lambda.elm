@@ -16,7 +16,7 @@ type HttpError
 
 type Event
   = Videos String
-  | Response (Result HttpError Decode.Value)
+  | Response String (Result HttpError Decode.Value)
 
 event : (Result Decode.Error Event -> msg) -> Sub msg
 event tagger =
@@ -36,16 +36,27 @@ eventDecoder =
           Decode.map Videos
             (Decode.at ["event", "user_id"] Decode.string)
         "response" ->
-          Decode.map (Response<<Ok)
-            (Decode.field "body" Decode.value)
+          Decode.map2 Response
+            (Decode.field "tag" Decode.string)
+            (Decode.map Ok
+              (Decode.field "body" Decode.value)
+            )
         "badStatus" ->
-          Decode.map (Response<<Err<<BadStatus)
-            (Decode.field "status" Decode.int)
+          Decode.map2 Response
+            (Decode.field "tag" Decode.string)
+            (Decode.map (Err<<BadStatus)
+              (Decode.field "status" Decode.int)
+            )
         "badBody" ->
-          Decode.map (Response<<Err<<BadBody)
-            (Decode.field "error" Decode.string)
+          Decode.map2 Response
+            (Decode.field "tag" Decode.string)
+            (Decode.map (Err<<BadBody)
+              (Decode.field "error" Decode.string)
+            )
         "networkError" ->
-          Decode.succeed (Response (Err NetworkError))
+          Decode.map2 Response
+            (Decode.field "tag" Decode.string)
+            (Decode.succeed (Err NetworkError))
         _ -> Decode.fail kind
     )
 
@@ -66,6 +77,7 @@ request :
   , path : String
   , method : String
   , headers : List Header
+  , tag : String
   }
   -> Cmd msg
 request req =
@@ -76,6 +88,7 @@ request req =
       , ("path", Encode.string req.path)
       , ("method", Encode.string req.method)
       , ("headers", encodeHeaders req.headers)
+      , ("tag", Encode.string req.tag)
       ])
     ]
     |> lambdaCommand
