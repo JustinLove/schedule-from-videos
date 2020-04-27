@@ -1,5 +1,6 @@
 module Handler exposing (main)
 
+import Encode
 import Env exposing (Env)
 import Lambda
 import Secret exposing (Secret)
@@ -66,6 +67,7 @@ update msg model =
           |> Result.mapError (Debug.log "video decode error")
           |> Result.withDefault []
           |> List.filter (\v -> v.videoType == Helix.Archive)
+          |> Encode.videos
           |> Debug.log "videos"
       in
         (model, Cmd.none)
