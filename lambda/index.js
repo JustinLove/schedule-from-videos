@@ -214,6 +214,7 @@ var withClientSecret = function(callback) {
 exports.handler = function(event, context, callback) {
   app.ports.lambdaEvent.send({
     kind: 'lambdaEvent',
+    state: callback,
     event: event,
   })
   /*
@@ -231,7 +232,7 @@ const elm = require('./handler')
 
 const app = elm.Elm.Handler.init({flags: process.env});
 
-var request = function(info) {
+var httpRequest = function(info, state) {
   const req = https.request({
     hostname: info.hostname,
     path: info.path,
@@ -248,7 +249,8 @@ var request = function(info) {
         const parsedData = JSON.parse(rawData);
         if (res.statusCode == 200) {
           app.ports.lambdaEvent.send({
-            kind: 'response',
+            kind: 'httpResponse',
+            state: state,
             tag: info.tag,
             body: parsedData,
           })
@@ -256,6 +258,7 @@ var request = function(info) {
           console.log(parsedData)
           app.ports.lambdaEvent.send({
             kind: 'badStatus',
+            state: state,
             tag: info.tag,
             status: res.statusCode,
             body: parsedData,
@@ -265,6 +268,7 @@ var request = function(info) {
         console.error(e.message);
         app.ports.lambdaEvent.send({
           kind: 'badBody',
+          state: state,
           tag: info.tag,
           error: e,
         })
@@ -276,6 +280,7 @@ var request = function(info) {
     console.error('request failed', err);
     app.ports.lambdaEvent.send({
       kind: 'networkError',
+      state: state,
       tag: info.tag,
       error: err,
     })
@@ -288,8 +293,8 @@ var request = function(info) {
 var command = function(message) {
   //console.log(message)
   switch (message.kind) {
-    case 'request':
-      request(message.request)
+    case 'httpRequest':
+      httpRequest(message.request, message.state)
       break;
     default:
       console.log('unknown message', message)

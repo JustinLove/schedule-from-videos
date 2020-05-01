@@ -1,31 +1,43 @@
 port module Lambda exposing
-  ( Event(..)
+  ( State
+  , Event(..)
+  , EventState(..)
   , event
   , Header
   , header
-  , request
+  , httpRequest
   )
 
 import Json.Decode as Decode exposing (Value)
 import Json.Encode as Encode
+
+type alias State = Value
 
 type HttpError
   = BadStatus Int Value
   | BadBody String
   | NetworkError
 
-type Event
-  = Videos String
-  | Response String (Result HttpError Decode.Value)
+type EventState = EventState State Event
 
-event : (Result Decode.Error Event -> msg) -> Sub msg
+type Event
+  = NewEvent Value
+  | HttpResponse String (Result HttpError Value)
+
+event : (Result Decode.Error EventState -> msg) -> Sub msg
 event tagger =
   lambdaEvent (decodeEvent >> tagger)
 
-decodeEvent : Value -> Result Decode.Error Event
+decodeEvent : Value -> Result Decode.Error EventState
 decodeEvent thing =
-  Decode.decodeValue eventDecoder thing
+  Decode.decodeValue eventStateDecoder thing
     |> Result.mapError (Debug.log "lambda decode error")
+
+eventStateDecoder : Decode.Decoder EventState
+eventStateDecoder =
+  Decode.map2 EventState
+    stateDecoder
+    eventDecoder
 
 eventDecoder : Decode.Decoder Event
 eventDecoder =
@@ -33,16 +45,16 @@ eventDecoder =
     |> Decode.andThen(\kind ->
       case Debug.log "kind" kind of
         "lambdaEvent" ->
-          Decode.map Videos
-            (Decode.at ["event", "user_id"] Decode.string)
-        "response" ->
-          Decode.map2 Response
+          Decode.map NewEvent
+            (Decode.field "event" Decode.value)
+        "httpResponse" ->
+          Decode.map2 HttpResponse
             (Decode.field "tag" Decode.string)
             (Decode.map Ok
               (Decode.field "body" Decode.value)
             )
         "badStatus" ->
-          Decode.map2 Response
+          Decode.map2 HttpResponse
             (Decode.field "tag" Decode.string)
             (Decode.map Err
               (Decode.map2 BadStatus
@@ -51,17 +63,21 @@ eventDecoder =
               )
             )
         "badBody" ->
-          Decode.map2 Response
+          Decode.map2 HttpResponse
             (Decode.field "tag" Decode.string)
             (Decode.map (Err<<BadBody)
               (Decode.field "error" Decode.string)
             )
         "networkError" ->
-          Decode.map2 Response
+          Decode.map2 HttpResponse
             (Decode.field "tag" Decode.string)
             (Decode.succeed (Err NetworkError))
         _ -> Decode.fail kind
     )
+
+stateDecoder : Decode.Decoder State
+stateDecoder =
+  Decode.field "state" Decode.value
 
 type Header = Header String String
 
@@ -75,17 +91,19 @@ encodeHeader (Header name value) =
 encodeHeaders : List Header -> Value
 encodeHeaders = (List.map encodeHeader) >> Encode.object
 
-request :
+httpRequest :
   { hostname : String
   , path : String
   , method : String
   , headers : List Header
   , tag : String
   }
+  -> Value
   -> Cmd msg
-request req =
+httpRequest req state =
   Encode.object
-    [ ("kind", Encode.string "request")
+    [ ("kind", Encode.string "httpRequest")
+    , ("state", state)
     , ("request", Encode.object
       [ ("hostname", Encode.string req.hostname)
       , ("path", Encode.string req.path)

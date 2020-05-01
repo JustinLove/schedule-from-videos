@@ -8,18 +8,18 @@ import Secret exposing (Secret)
 import Twitch.Id.Decode as Id
 import Twitch.Helix.Decode as Helix
 
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (Value)
+import Json.Encode as Encode
 import Platform
 
 
 type alias Model =
   { env : Env
-  , userId : Maybe String
   , auth : Maybe Secret
   }
 
 type Msg
-  = Event (Result Decode.Error Lambda.Event)
+  = Event (Result Decode.Error Lambda.EventState)
 
 main = Platform.worker
   { init = init
@@ -36,20 +36,57 @@ init flags =
 initialModel : Env -> Model
 initialModel env =
   { env = env
-  , userId = Nothing
   , auth = Nothing
   }
+
+type alias State = Decode.Value
+
+newState : String -> Value -> State
+newState userId session =
+  Encode.object
+    [ ("user_id", Encode.string userId)
+    , ("session", session)
+    ]
+
+stateUserId : State -> Result Decode.Error String
+stateUserId =
+  Decode.decodeValue (Decode.field "user_id" Decode.string)
+
+stateSession : State -> Result Decode.Error Value
+stateSession =
+  Decode.decodeValue (Decode.field "session" Decode.value)
+
+type alias VideosRequest =
+  { userId : String }
+
+videosRequest : Decode.Decoder VideosRequest
+videosRequest =
+  Decode.map VideosRequest (Decode.field "user_id" Decode.string)
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    Event (Ok (Lambda.Videos userid)) ->
-      ( {model | userId = Just userid}
-      , case model.auth of
-        Nothing -> fetchToken model.env
-        Just auth -> Debug.todo "reuse token"
+    Event (Ok (Lambda.EventState state event)) ->
+      updateEvent event state model
+    Event (Err err) ->
+      let _ = Debug.log "error" err in
+      (model, Cmd.none)
+
+updateEvent : Lambda.Event -> State -> Model -> (Model, Cmd Msg)
+updateEvent event state model =
+  case event of
+    Lambda.NewEvent data ->
+      ( model
+      , case Decode.decodeValue videosRequest data of
+          Ok {userId} ->
+            case model.auth of
+              Nothing -> fetchToken model.env (newState userId state)
+              Just auth -> Debug.todo "reuse token"
+          Err err ->
+            let _ = Debug.log "event error" err in
+            errorResponseSession "unrecognized event" state
       )
-    Event (Ok (Lambda.Response "fetchToken" (Ok json))) ->
+    Lambda.HttpResponse "fetchToken" (Ok json) ->
       let
         auth = json
           |> Decode.decodeValue Id.appOAuth
@@ -58,9 +95,14 @@ update msg model =
           |> Result.toMaybe
       in
       ( { model | auth = auth }
-      , fetchVideos model.env auth model.userId
+      , case stateUserId state of
+          Ok userId ->
+            fetchVideos model.env auth userId state
+          Err err ->
+            let _ = Debug.log "event error" err in
+            errorResponseState "userid missing" state
       )
-    Event (Ok (Lambda.Response "fetchVideos" (Ok json))) ->
+    Lambda.HttpResponse "fetchVideos" (Ok json) ->
       let
         videos = json
           |> Decode.decodeValue Helix.videos
@@ -71,15 +113,22 @@ update msg model =
           |> Debug.log "videos"
       in
         (model, Cmd.none)
-    Event (Ok (Lambda.Response tag (Ok json))) ->
+    Lambda.HttpResponse tag (Ok json) ->
       let _ = Debug.log ("unknown response " ++ tag) json in
       (model, Cmd.none)
-    Event (Ok (Lambda.Response tag (Err err))) ->
+    Lambda.HttpResponse tag (Err err) ->
       let _ = Debug.log ("http error " ++ tag) err in
       (model, Cmd.none)
-    Event (Err err) ->
-      let _ = Debug.log "error" err in
-      (model, Cmd.none)
+
+errorResponseSession : String -> Value -> Cmd Msg
+errorResponseSession reason session =
+  Debug.todo reason
+
+errorResponseState : String -> Value -> Cmd Msg
+errorResponseState reason state =
+  case stateSession state of
+    Ok session -> errorResponseSession reason session
+    Err err -> Debug.todo ("error response did not find session. " ++ reason)
 
 standardHeaders =
   [ Lambda.header "User-Agent" "Schedule From Videos Lambda"
@@ -116,15 +165,16 @@ tokenPath env =
         ++ "&client_secret=" ++ (Secret.toString clientSecret)
         ++ "&grant_type=client_credentials"
 
-fetchToken : Env -> Cmd Msg
-fetchToken env =
-  Lambda.request
+fetchToken : Env -> State -> Cmd Msg
+fetchToken env state =
+  Lambda.httpRequest
     { hostname = tokenHostname
     , path = tokenPath env
     , method = "POST"
     , headers = standardHeaders
     , tag = "fetchToken"
     }
+    state
 
 helixHostname = "api.twitch.tv"
 
@@ -132,18 +182,16 @@ videosPath : String -> String
 videosPath userId =
   "/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : Env -> Maybe Secret -> Maybe String -> Cmd Msg
-fetchVideos env auth muserId=
-  case muserId of
-    Nothing -> Cmd.none
-    Just userId ->
-      Lambda.request
-        { hostname = helixHostname
-        , path = Debug.log "path" <| videosPath userId
-        , method = "GET"
-        , headers = oauthHeaders env auth
-        , tag = "fetchVideos"
-        }
+fetchVideos : Env -> Maybe Secret -> String -> State -> Cmd Msg
+fetchVideos env auth userId state =
+  Lambda.httpRequest
+    { hostname = helixHostname
+    , path = Debug.log "path" <| videosPath userId
+    , method = "GET"
+    , headers = oauthHeaders env auth
+    , tag = "fetchVideos"
+    }
+    state
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Lambda.event Event
