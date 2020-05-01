@@ -296,6 +296,12 @@ var command = function(message) {
     case 'httpRequest':
       httpRequest(message.request, message.state)
       break;
+    case 'success':
+      message.session(null, message.data)
+      break;
+    case 'error':
+      message.session(message.error)
+      break;
     default:
       console.log('unknown message', message)
       break;

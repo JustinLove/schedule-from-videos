@@ -84,7 +84,7 @@ updateEvent event state model =
               Just auth -> Debug.todo "reuse token"
           Err err ->
             let _ = Debug.log "event error" err in
-            errorResponseSession "unrecognized event" state
+            errorResponseSession state "unrecognized event"
       )
     Lambda.HttpResponse "fetchToken" (Ok json) ->
       let
@@ -100,7 +100,7 @@ updateEvent event state model =
             fetchVideos model.env auth userId state
           Err err ->
             let _ = Debug.log "event error" err in
-            errorResponseState "userid missing" state
+            errorResponseState state "userid missing"
       )
     Lambda.HttpResponse "fetchVideos" (Ok json) ->
       let
@@ -110,9 +110,9 @@ updateEvent event state model =
           |> Result.withDefault []
           |> List.filter (\v -> v.videoType == Helix.Archive)
           |> Encode.videos
-          |> Debug.log "videos"
+          |> (\v -> Encode.object [ ("videos", v) ])
       in
-        (model, Cmd.none)
+        (model, sendResponse state videos)
     Lambda.HttpResponse tag (Ok json) ->
       let _ = Debug.log ("unknown response " ++ tag) json in
       (model, Cmd.none)
@@ -120,15 +120,21 @@ updateEvent event state model =
       let _ = Debug.log ("http error " ++ tag) err in
       (model, Cmd.none)
 
-errorResponseSession : String -> Value -> Cmd Msg
-errorResponseSession reason session =
-  Debug.todo reason
+errorResponseSession : Value -> String -> Cmd Msg
+errorResponseSession session reason =
+  Lambda.response session (Err reason)
 
-errorResponseState : String -> Value -> Cmd Msg
-errorResponseState reason state =
+errorResponseState : Value -> String -> Cmd Msg
+errorResponseState state reason =
   case stateSession state of
-    Ok session -> errorResponseSession reason session
+    Ok session -> errorResponseSession session reason
     Err err -> Debug.todo ("error response did not find session. " ++ reason)
+
+sendResponse : Value -> Value -> Cmd Msg
+sendResponse state response =
+  case stateSession state of
+    Ok session -> Lambda.response session (Ok response)
+    Err err -> Debug.todo "response did not find session. "
 
 standardHeaders =
   [ Lambda.header "User-Agent" "Schedule From Videos Lambda"

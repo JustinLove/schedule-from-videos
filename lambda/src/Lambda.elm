@@ -6,6 +6,7 @@ port module Lambda exposing
   , Header
   , header
   , httpRequest
+  , response
   )
 
 import Json.Decode as Decode exposing (Value)
@@ -111,6 +112,30 @@ httpRequest req state =
       , ("headers", encodeHeaders req.headers)
       , ("tag", Encode.string req.tag)
       ])
+    ]
+    |> lambdaCommand
+
+response : Value -> Result String Value -> Cmd msg
+response session result =
+  case result of
+    Ok value -> successResponse session value
+    Err err -> errorResponse session err
+
+errorResponse : Value -> String -> Cmd msg
+errorResponse session error =
+  Encode.object
+    [ ("kind", Encode.string "error")
+    , ("session", session)
+    , ("error", Encode.string error)
+    ]
+    |> lambdaCommand
+
+successResponse : Value -> Value -> Cmd msg
+successResponse session data =
+  Encode.object
+    [ ("kind", Encode.string "success")
+    , ("session", session)
+    , ("data", data)
     ]
     |> lambdaCommand
 
