@@ -80,27 +80,31 @@ updateEvent event state model =
       , case Decode.decodeValue videosRequest data of
           Ok {userId} ->
             case model.auth of
-              Nothing -> fetchToken model.env (newState userId state)
-              Just auth -> Debug.todo "reuse token"
+              Nothing ->
+                fetchToken model.env (newState userId state)
+              Just auth ->
+                fetchVideos model.env auth userId (newState userId state)
           Err err ->
             let _ = Debug.log "event error" err in
             errorResponseSession state "unrecognized event"
       )
     Lambda.HttpResponse "fetchToken" (Ok json) ->
       let
-        auth = json
+        mauth = json
           |> Decode.decodeValue Id.appOAuth
           |> Result.map (.accessToken>>Secret.fromString)
           |> Result.mapError (Debug.log "token decode error")
           |> Result.toMaybe
       in
-      ( { model | auth = auth }
-      , case stateUserId state of
-          Ok userId ->
+      ( { model | auth = mauth }
+      , case (mauth, stateUserId state) of
+          (Just auth, Ok userId) ->
             fetchVideos model.env auth userId state
-          Err err ->
+          (_, Err err) ->
             let _ = Debug.log "event error" err in
             errorResponseState state "userid missing"
+          (Nothing, _) ->
+            errorResponseState state "token decode error"
       )
     Lambda.HttpResponse "fetchVideos" (Ok json) ->
       let
@@ -140,14 +144,12 @@ standardHeaders =
   [ Lambda.header "User-Agent" "Schedule From Videos Lambda"
   ]
 
-oauthHeaders : Env -> Maybe Secret -> List Lambda.Header
-oauthHeaders env auth =
-  case (env, auth) of
-    (Env.Encrypted _, _) ->
+oauthHeaders : Env -> Secret -> List Lambda.Header
+oauthHeaders env token =
+  case env of
+    Env.Encrypted _ ->
       Debug.todo "decrypt env"
-    (_, Nothing) ->
-      Debug.todo "not authenticated"
-    (Env.Plain {clientId}, Just token) ->
+    Env.Plain {clientId} ->
       twitchHeaders (Secret.toString clientId) (Secret.toString token)
         |> List.append standardHeaders
 
@@ -186,9 +188,9 @@ helixHostname = "api.twitch.tv"
 
 videosPath : String -> String
 videosPath userId =
-  "/helix/videos?first=100&type=archive&user_id=" ++ userId
+  "/helix/videos?first=1&type=archive&user_id=" ++ userId
 
-fetchVideos : Env -> Maybe Secret -> String -> State -> Cmd Msg
+fetchVideos : Env -> Secret -> String -> State -> Cmd Msg
 fetchVideos env auth userId state =
   Lambda.httpRequest
     { hostname = helixHostname
