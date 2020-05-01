@@ -48,7 +48,7 @@ eventDecoder : Decode.Decoder Event
 eventDecoder =
   (Decode.field "kind" Decode.string)
     |> Decode.andThen(\kind ->
-      case Debug.log "kind" kind of
+      case kind of
         "lambdaEvent" ->
           Decode.map NewEvent
             (Decode.field "event" Decode.value)

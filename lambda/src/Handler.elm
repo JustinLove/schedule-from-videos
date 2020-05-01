@@ -224,7 +224,7 @@ fetchVideos : Env -> Secret -> String -> State -> Cmd Msg
 fetchVideos env auth userId state =
   Lambda.httpRequest
     { hostname = helixHostname
-    , path = Debug.log "path" <| videosPath userId
+    , path = videosPath userId
     , method = "GET"
     , headers = oauthHeaders env auth
     , tag = "fetchVideos"

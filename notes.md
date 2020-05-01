@@ -1,8 +1,14 @@
 - working plan: aws lambda, node
-  - keys in environment vars
-  - starting elm
-    - method to associate result with it's js callback
-      - callback as Json.Value?
+  - auth error retry
+  - frontend handling predecoded timestamps
+  - multiple event types
+    - id, event only (extension)
+    - id, fetch name
+    - username
+  - versioning
+    - api gateway - stages
+    - lambda
+  - cdn
 - https://obsproject.com/tools/browser-drag-and-drop
 - move day labels depending on data location?
 - note about display timezone
