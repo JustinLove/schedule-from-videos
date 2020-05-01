@@ -79,15 +79,45 @@ updateEvent event state model =
       ( model
       , case Decode.decodeValue videosRequest data of
           Ok {userId} ->
-            case model.auth of
-              Nothing ->
-                fetchToken model.env (newState userId state)
-              Just auth ->
-                fetchVideos model.env auth userId (newState userId state)
+            let state2 = newState userId state in
+            case model.env of
+              Env.Plain _ ->
+                case model.auth of
+                  Nothing ->
+                    fetchToken model.env state2
+                  Just auth ->
+                    fetchVideos model.env auth userId state2
+              Env.Encrypted {clientId, clientSecret} ->
+                Lambda.decrypt [clientId, clientSecret] state2
           Err err ->
             let _ = Debug.log "event error" err in
             errorResponseSession state "unrecognized event"
       )
+    Lambda.Decrypted (Ok [id, secret]) ->
+      let
+        env = Env.Plain
+          { clientId = id
+          , clientSecret = secret
+          }
+      in
+      ( { model | env = env }
+      , case model.auth of
+        Nothing ->
+          fetchToken env state
+        Just auth ->
+          case stateUserId state of
+            Ok userId ->
+              fetchVideos env auth userId state
+            Err err ->
+              let _ = Debug.log "event error" err in
+              errorResponseState state "userid missing"
+      )
+    Lambda.Decrypted (Ok _) ->
+      let _ = Debug.log ("decrypt wrong number of results ") in
+      (model, Cmd.none)
+    Lambda.Decrypted (Err err) ->
+      let _ = Debug.log ("decrypt error ") err in
+      (model, Cmd.none)
     Lambda.HttpResponse "fetchToken" (Ok json) ->
       let
         mauth = json
@@ -188,7 +218,7 @@ helixHostname = "api.twitch.tv"
 
 videosPath : String -> String
 videosPath userId =
-  "/helix/videos?first=1&type=archive&user_id=" ++ userId
+  "/helix/videos?first=100&type=archive&user_id=" ++ userId
 
 fetchVideos : Env -> Secret -> String -> State -> Cmd Msg
 fetchVideos env auth userId state =

@@ -232,6 +232,30 @@ const elm = require('./handler')
 
 const app = elm.Elm.Handler.init({flags: process.env});
 
+var decryptValues = function(encrypted, decrypted, state) {
+  var encValue = encrypted.shift()
+  decrypt(encValue, function(err, decValue) {
+    if (err) {
+      app.ports.lambdaEvent.send({
+        kind: 'decryptionError',
+        state: state,
+        error: err.toString(),
+      })
+      return
+    }
+    decrypted.push(decValue)
+    if (encrypted.length < 1) {
+      app.ports.lambdaEvent.send({
+        kind: 'decrypted',
+        state: state,
+        values: decrypted,
+      })
+    } else {
+      decryptValues(encrypted, decrypted, state)
+    }
+  })
+}
+
 var httpRequest = function(info, state) {
   const req = https.request({
     hostname: info.hostname,
@@ -293,6 +317,9 @@ var httpRequest = function(info, state) {
 var command = function(message) {
   //console.log(message)
   switch (message.kind) {
+    case 'decrypt':
+      decryptValues(message.values, [], message.state)
+      break;
     case 'httpRequest':
       httpRequest(message.request, message.state)
       break;

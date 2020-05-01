@@ -4,3 +4,5 @@ public/schedule-from-videos.js
 public/config/config.js
 lambda/.env
 lambda/handler.js
+lambda/node_modules
+lambda/package-lock.json

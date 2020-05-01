@@ -3,11 +3,14 @@ port module Lambda exposing
   , Event(..)
   , EventState(..)
   , event
+  , decrypt
   , Header
   , header
   , httpRequest
   , response
   )
+
+import Secret exposing (Secret)
 
 import Json.Decode as Decode exposing (Value)
 import Json.Encode as Encode
@@ -23,6 +26,7 @@ type EventState = EventState State Event
 
 type Event
   = NewEvent Value
+  | Decrypted (Result String (List Secret))
   | HttpResponse String (Result HttpError Value)
 
 event : (Result Decode.Error EventState -> msg) -> Sub msg
@@ -48,6 +52,20 @@ eventDecoder =
         "lambdaEvent" ->
           Decode.map NewEvent
             (Decode.field "event" Decode.value)
+        "decrypted" ->
+          Decode.map Decrypted
+            (Decode.map Ok
+              (Decode.field "values"
+                (Decode.list
+                  (Decode.map Secret.fromString Decode.string)
+                )
+              )
+            )
+        "decryptionError" ->
+          Decode.map Decrypted
+            (Decode.map Err
+              (Decode.field "error" Decode.string)
+            )
         "httpResponse" ->
           Decode.map2 HttpResponse
             (Decode.field "tag" Decode.string)
@@ -79,6 +97,17 @@ eventDecoder =
 stateDecoder : Decode.Decoder State
 stateDecoder =
   Decode.field "state" Decode.value
+
+decrypt : List Secret -> Value -> Cmd msg
+decrypt values state =
+  Encode.object
+    [ ("kind", Encode.string "decrypt")
+    , ("state", state)
+    , ("values", values
+      |> Encode.list (Secret.toString>>Encode.string)
+      )
+    ]
+    |> lambdaCommand
 
 type Header = Header String String
 
