@@ -2,6 +2,7 @@ port module Lambda exposing
   ( State
   , Event(..)
   , EventState(..)
+  , HttpError(..)
   , event
   , decrypt
   , Header
@@ -98,11 +99,10 @@ stateDecoder : Decode.Decoder State
 stateDecoder =
   Decode.field "state" Decode.value
 
-decrypt : List Secret -> Value -> Cmd msg
-decrypt values state =
+decrypt : List Secret -> Cmd msg
+decrypt values =
   Encode.object
     [ ("kind", Encode.string "decrypt")
-    , ("state", state)
     , ("values", values
       |> Encode.list (Secret.toString>>Encode.string)
       )

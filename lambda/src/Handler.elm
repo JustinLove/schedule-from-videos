@@ -1,9 +1,12 @@
 module Handler exposing (main)
 
-import Encode
 import Env exposing (Env)
 import Lambda
+import Reply.Encode as Encode
 import Secret exposing (Secret)
+import State exposing (Retry(..), FetchVideos, State)
+import State.Decode as Decode
+import State.Encode as Encode
 
 import Twitch.Id.Decode as Id
 import Twitch.Helix.Decode as Helix
@@ -16,10 +19,14 @@ import Platform
 type alias Model =
   { env : Env
   , auth : Maybe Secret
+  , pendingRequests : List Request
   }
 
 type Msg
   = Event (Result Decode.Error Lambda.EventState)
+
+type Request
+  = FetchVideosRequest FetchVideos
 
 main = Platform.worker
   { init = init
@@ -37,24 +44,8 @@ initialModel : Env -> Model
 initialModel env =
   { env = env
   , auth = Nothing
+  , pendingRequests = []
   }
-
-type alias State = Decode.Value
-
-newState : String -> Value -> State
-newState userId session =
-  Encode.object
-    [ ("user_id", Encode.string userId)
-    , ("session", session)
-    ]
-
-stateUserId : State -> Result Decode.Error String
-stateUserId =
-  Decode.decodeValue (Decode.field "user_id" Decode.string)
-
-stateSession : State -> Result Decode.Error Value
-stateSession =
-  Decode.decodeValue (Decode.field "session" Decode.value)
 
 type alias VideosRequest =
   { userId : String }
@@ -76,23 +67,16 @@ updateEvent : Lambda.Event -> State -> Model -> (Model, Cmd Msg)
 updateEvent event state model =
   case event of
     Lambda.NewEvent data ->
-      ( model
-      , case Decode.decodeValue videosRequest data of
-          Ok {userId} ->
-            let state2 = newState userId state in
-            case model.env of
-              Env.Plain _ ->
-                case model.auth of
-                  Nothing ->
-                    fetchToken model.env state2
-                  Just auth ->
-                    fetchVideos model.env auth userId state2
-              Env.Encrypted {clientId, clientSecret} ->
-                Lambda.decrypt [clientId, clientSecret] state2
-          Err err ->
-            let _ = Debug.log "event error" err in
-            errorResponseSession state "unrecognized event"
-      )
+      case Decode.decodeValue videosRequest data of
+        Ok {userId} ->
+          { model | pendingRequests = List.append
+            [FetchVideosRequest (State.fetchVideos userId state)]
+            model.pendingRequests
+          }
+            |> step
+        Err err ->
+          let _ = Debug.log "event error" err in
+          (model, errorResponse state "unrecognized event")
     Lambda.Decrypted (Ok [id, secret]) ->
       let
         env = Env.Plain
@@ -100,18 +84,8 @@ updateEvent event state model =
           , clientSecret = secret
           }
       in
-      ( { model | env = env }
-      , case model.auth of
-        Nothing ->
-          fetchToken env state
-        Just auth ->
-          case stateUserId state of
-            Ok userId ->
-              fetchVideos env auth userId state
-            Err err ->
-              let _ = Debug.log "event error" err in
-              errorResponseState state "userid missing"
-      )
+      { model | env = env }
+        |> step
     Lambda.Decrypted (Ok _) ->
       let _ = Debug.log ("decrypt wrong number of results ") in
       (model, Cmd.none)
@@ -126,18 +100,13 @@ updateEvent event state model =
           |> Result.mapError (Debug.log "token decode error")
           |> Result.toMaybe
       in
-      ( { model | auth = mauth }
-      , case (mauth, stateUserId state) of
-          (Just auth, Ok userId) ->
-            fetchVideos model.env auth userId state
-          (_, Err err) ->
-            let _ = Debug.log "event error" err in
-            errorResponseState state "userid missing"
-          (Nothing, _) ->
-            errorResponseState state "token decode error"
-      )
+      { model | auth = mauth }
+        |> step
     Lambda.HttpResponse "fetchVideos" (Ok json) ->
       let
+        session = state
+          |> Decode.fetchVideos
+          |> Result.map .session
         videos = json
           |> Decode.decodeValue Helix.videos
           |> Result.mapError (Debug.log "video decode error")
@@ -146,27 +115,51 @@ updateEvent event state model =
           |> Encode.videos
           |> (\v -> Encode.object [ ("videos", v) ])
       in
-        (model, sendResponse state videos)
+        (model, sendResponse session videos)
     Lambda.HttpResponse tag (Ok json) ->
       let _ = Debug.log ("unknown response " ++ tag) json in
+      (model, Cmd.none)
+    Lambda.HttpResponse tag (Err (Lambda.BadStatus 401 body)) ->
+      let _ = Debug.log ("auth failed" ++ tag) body in
+      --let state2 = retried state in
       (model, Cmd.none)
     Lambda.HttpResponse tag (Err err) ->
       let _ = Debug.log ("http error " ++ tag) err in
       (model, Cmd.none)
 
-errorResponseSession : Value -> String -> Cmd Msg
-errorResponseSession session reason =
+step : Model -> (Model, Cmd Msg)
+step model =
+  case model.env of
+    Env.Plain env ->
+      case model.auth of
+        Nothing ->
+          (model, fetchToken env)
+        Just auth ->
+          executeNextRequest (ApiAuth env.clientId auth) model
+    Env.Encrypted {clientId, clientSecret} ->
+      (model, Lambda.decrypt [clientId, clientSecret])
+
+executeNextRequest : ApiAuth -> Model -> (Model, Cmd Msg)
+executeNextRequest auth model = 
+  case model.pendingRequests of
+    next :: rest ->
+      ({model | pendingRequests = rest}, executeRequest auth next)
+    [] ->
+      (model, Cmd.none)
+
+executeRequest : ApiAuth -> Request -> Cmd Msg
+executeRequest auth request = 
+  case request of
+    FetchVideosRequest state ->
+      fetchVideos auth state.userId state
+
+errorResponse : Value -> String -> Cmd Msg
+errorResponse session reason =
   Lambda.response session (Err reason)
 
-errorResponseState : Value -> String -> Cmd Msg
-errorResponseState state reason =
-  case stateSession state of
-    Ok session -> errorResponseSession session reason
-    Err err -> Debug.todo ("error response did not find session. " ++ reason)
-
-sendResponse : Value -> Value -> Cmd Msg
-sendResponse state response =
-  case stateSession state of
+sendResponse : Result Decode.Error Value -> Value -> Cmd Msg
+sendResponse rsession response =
+  case rsession of
     Ok session -> Lambda.response session (Ok response)
     Err err -> Debug.todo "response did not find session. "
 
@@ -174,14 +167,15 @@ standardHeaders =
   [ Lambda.header "User-Agent" "Schedule From Videos Lambda"
   ]
 
-oauthHeaders : Env -> Secret -> List Lambda.Header
-oauthHeaders env token =
-  case env of
-    Env.Encrypted _ ->
-      Debug.todo "decrypt env"
-    Env.Plain {clientId} ->
-      twitchHeaders (Secret.toString clientId) (Secret.toString token)
-        |> List.append standardHeaders
+type alias ApiAuth =
+  { clientId : Secret
+  , token : Secret
+  }
+
+oauthHeaders : ApiAuth -> List Lambda.Header
+oauthHeaders {clientId, token} =
+  twitchHeaders (Secret.toString clientId) (Secret.toString token)
+    |> List.append standardHeaders
 
 twitchHeaders : String -> String -> List Lambda.Header
 twitchHeaders clientId token =
@@ -192,19 +186,15 @@ twitchHeaders clientId token =
 --tokenHostname = "localhost"
 tokenHostname = "id.twitch.tv"
 
-tokenPath : Env -> String
-tokenPath env =
-  case env of
-    Env.Encrypted _ ->
-      Debug.todo "decrypt env"
-    Env.Plain {clientId, clientSecret}->
-      "/oauth2/token"
-        ++ "?client_id=" ++ (Secret.toString clientId)
-        ++ "&client_secret=" ++ (Secret.toString clientSecret)
-        ++ "&grant_type=client_credentials"
+tokenPath : Env.PlainEnv -> String
+tokenPath {clientId, clientSecret} =
+  "/oauth2/token"
+    ++ "?client_id=" ++ (Secret.toString clientId)
+    ++ "&client_secret=" ++ (Secret.toString clientSecret)
+    ++ "&grant_type=client_credentials"
 
-fetchToken : Env -> State -> Cmd Msg
-fetchToken env state =
+fetchToken : Env.PlainEnv -> Cmd Msg
+fetchToken env =
   Lambda.httpRequest
     { hostname = tokenHostname
     , path = tokenPath env
@@ -212,7 +202,7 @@ fetchToken env state =
     , headers = standardHeaders
     , tag = "fetchToken"
     }
-    state
+    Encode.null
 
 helixHostname = "api.twitch.tv"
 
@@ -220,16 +210,16 @@ videosPath : String -> String
 videosPath userId =
   "/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : Env -> Secret -> String -> State -> Cmd Msg
-fetchVideos env auth userId state =
+fetchVideos : ApiAuth -> String -> FetchVideos -> Cmd Msg
+fetchVideos auth userId state =
   Lambda.httpRequest
     { hostname = helixHostname
     , path = videosPath userId
     , method = "GET"
-    , headers = oauthHeaders env auth
+    , headers = oauthHeaders auth
     , tag = "fetchVideos"
     }
-    state
+    (Encode.fetchVideos state)
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Lambda.event Event

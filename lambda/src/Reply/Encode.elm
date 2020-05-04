@@ -1,4 +1,4 @@
-module Encode exposing (videos)
+module Reply.Encode exposing (videos)
 
 import Twitch.Helix.Decode as Helix exposing (Video)
 
