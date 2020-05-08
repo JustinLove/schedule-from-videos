@@ -67,8 +67,8 @@ updateEvent event state model =
       case Decode.decodeValue videosRequest data of
         Ok {userId} ->
           { model | pendingRequests = List.append
-            [State.fetchVideos userId state]
             model.pendingRequests
+            [State.fetchVideos userId state]
           }
             |> step
         Err err ->
@@ -85,10 +85,10 @@ updateEvent event state model =
         |> step
     Lambda.Decrypted (Ok _) ->
       let _ = Debug.log ("decrypt wrong number of results ") in
-      (model, Cmd.none)
+      withAllRequests (errorResponseState "service misconfiguration") model
     Lambda.Decrypted (Err err) ->
       let _ = Debug.log ("decrypt error ") err in
-      (model, Cmd.none)
+      withAllRequests (errorResponseState "service misconfiguration") model
     Lambda.HttpResponse "fetchToken" (Ok json) ->
       let
         mauth = json
@@ -117,9 +117,21 @@ updateEvent event state model =
       let _ = Debug.log ("unknown response " ++ tag) json in
       (model, Cmd.none)
     Lambda.HttpResponse tag (Err (Lambda.BadStatus 401 body)) ->
-      let _ = Debug.log ("auth failed" ++ tag) body in
-      --let state2 = retried state in
-      (model, Cmd.none)
+      let _ = Debug.log ("auth failed " ++ tag) body in
+      case Decode.decodeState state of
+        Ok s ->
+          if s.shouldRetry == WillRetry then
+            { model
+            | auth = Nothing
+            , pendingRequests = List.append
+                model.pendingRequests
+                [{s|shouldRetry = Retried}]
+            }
+              |> step
+          else
+            (model, errorResponse "unable to authenticate" s.session)
+        Err err ->
+          Debug.todo "401 on request with non-request state"
     Lambda.HttpResponse "fetchToken" (Err err) ->
       let _ = Debug.log "unable to fetch token" err in
       withAllRequests (errorResponseState "unable to fetch token") model

@@ -1,5 +1,4 @@
 - working plan: aws lambda, node
-  - auth error retry
   - frontend handling predecoded timestamps
   - multiple event types
     - id, event only (extension)
