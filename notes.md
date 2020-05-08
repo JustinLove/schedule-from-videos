@@ -1,5 +1,4 @@
 - working plan: aws lambda, node
-  - frontend handling predecoded timestamps
   - multiple event types
     - id, event only (extension)
     - id, fetch name

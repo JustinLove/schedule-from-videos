@@ -110,7 +110,7 @@ updateEvent event state model =
           |> Result.withDefault []
           |> List.filter (\v -> v.videoType == Helix.Archive)
           |> Encode.videos
-          |> (\v -> Encode.object [ ("videos", v) ])
+          |> (\v -> Encode.object [ ("events", v) ])
       in
         (model, sendResponse session videos)
     Lambda.HttpResponse tag (Ok json) ->

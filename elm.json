@@ -16,14 +16,14 @@
             "elm/svg": "1.0.1",
             "elm/time": "1.0.0",
             "elm/url": "1.0.0",
-            "rtfeldman/elm-iso8601-date-strings": "1.1.2",
             "the-sett/elm-color": "1.0.1",
             "timjs/elm-collage": "2.0.0"
         },
         "indirect": {
             "elm/bytes": "1.0.7",
             "elm/file": "1.0.1",
-            "elm/virtual-dom": "1.0.2"
+            "elm/virtual-dom": "1.0.2",
+            "rtfeldman/elm-iso8601-date-strings": "1.1.2"
         }
     },
     "test-dependencies": {
