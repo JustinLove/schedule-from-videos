@@ -3,6 +3,11 @@
     - id, event only (extension)
     - id, fetch name
     - username
+
+    /videos/userid
+    /videoswithname/userid
+    /user/username
+
   - versioning
     - api gateway - stages
     - lambda

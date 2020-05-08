@@ -1,6 +1,7 @@
 module Handler exposing (main)
 
 import Env exposing (Env)
+import Event.Decode as Event
 import Lambda
 import Reply.Encode as Encode
 import Secret exposing (Secret)
@@ -23,7 +24,7 @@ type alias Model =
   }
 
 type Msg
-  = Event (Result Decode.Error Lambda.EventState)
+  = Handle (Result Decode.Error Lambda.EventState)
 
 main = Platform.worker
   { init = init
@@ -44,19 +45,12 @@ initialModel env =
   , pendingRequests = []
   }
 
-type alias VideosRequest =
-  { userId : String }
-
-videosRequest : Decode.Decoder VideosRequest
-videosRequest =
-  Decode.map VideosRequest (Decode.field "user_id" Decode.string)
-
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    Event (Ok (Lambda.EventState state event)) ->
+    Handle (Ok (Lambda.EventState state event)) ->
       updateEvent event state model
-    Event (Err err) ->
+    Handle (Err err) ->
       let _ = Debug.log "error" err in
       (model, Cmd.none)
 
@@ -64,8 +58,8 @@ updateEvent : Lambda.Event -> Value -> Model -> (Model, Cmd Msg)
 updateEvent event state model =
   case event of
     Lambda.NewEvent data ->
-      case Decode.decodeValue videosRequest data of
-        Ok {userId} ->
+      case Decode.decodeValue Event.event data of
+        Ok (Event.Videos {userId}) ->
           { model | pendingRequests = List.append
             model.pendingRequests
             [State.fetchVideos userId state]
@@ -238,4 +232,4 @@ fetchVideos auth userId state =
     (Encode.state state)
 
 subscriptions : Model -> Sub Msg
-subscriptions model = Lambda.event Event
+subscriptions model = Lambda.event Handle
