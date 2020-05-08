@@ -79,25 +79,9 @@ var httpRequest = function(info, state) {
     let rawData = '';
     res.on('data', (chunk) => { rawData += chunk; });
     res.on('end', () => {
+      var parsedData
       try {
-        const parsedData = JSON.parse(rawData);
-        if (res.statusCode == 200) {
-          app.ports.lambdaEvent.send({
-            kind: 'httpResponse',
-            state: state,
-            tag: info.tag,
-            body: parsedData,
-          })
-        } else {
-          console.log(parsedData)
-          app.ports.lambdaEvent.send({
-            kind: 'badStatus',
-            state: state,
-            tag: info.tag,
-            status: res.statusCode,
-            body: parsedData,
-          })
-        }
+        parsedData = JSON.parse(rawData);
       } catch (e) {
         console.error(e.message);
         app.ports.lambdaEvent.send({
@@ -105,6 +89,25 @@ var httpRequest = function(info, state) {
           state: state,
           tag: info.tag,
           error: e,
+        })
+        return
+      }
+
+      if (res.statusCode == 200) {
+        app.ports.lambdaEvent.send({
+          kind: 'httpResponse',
+          state: state,
+          tag: info.tag,
+          body: parsedData,
+        })
+      } else {
+        console.log(parsedData)
+        app.ports.lambdaEvent.send({
+          kind: 'badStatus',
+          state: state,
+          tag: info.tag,
+          status: res.statusCode,
+          body: parsedData,
         })
       }
     });
