@@ -4,7 +4,7 @@ import Env exposing (Env)
 import Lambda
 import Reply.Encode as Encode
 import Secret exposing (Secret)
-import State exposing (Retry(..), FetchVideos, State)
+import State exposing (Retry(..), Request(..), State)
 import State.Decode as Decode
 import State.Encode as Encode
 
@@ -19,14 +19,11 @@ import Platform
 type alias Model =
   { env : Env
   , auth : Maybe Secret
-  , pendingRequests : List Request
+  , pendingRequests : List State
   }
 
 type Msg
   = Event (Result Decode.Error Lambda.EventState)
-
-type Request
-  = FetchVideosRequest FetchVideos
 
 main = Platform.worker
   { init = init
@@ -63,14 +60,14 @@ update msg model =
       let _ = Debug.log "error" err in
       (model, Cmd.none)
 
-updateEvent : Lambda.Event -> State -> Model -> (Model, Cmd Msg)
+updateEvent : Lambda.Event -> Value -> Model -> (Model, Cmd Msg)
 updateEvent event state model =
   case event of
     Lambda.NewEvent data ->
       case Decode.decodeValue videosRequest data of
         Ok {userId} ->
           { model | pendingRequests = List.append
-            [FetchVideosRequest (State.fetchVideos userId state)]
+            [State.fetchVideos userId state]
             model.pendingRequests
           }
             |> step
@@ -105,7 +102,7 @@ updateEvent event state model =
     Lambda.HttpResponse "fetchVideos" (Ok json) ->
       let
         session = state
-          |> Decode.fetchVideos
+          |> Decode.decodeState
           |> Result.map .session
         videos = json
           |> Decode.decodeValue Helix.videos
@@ -147,11 +144,11 @@ executeNextRequest auth model =
     [] ->
       (model, Cmd.none)
 
-executeRequest : ApiAuth -> Request -> Cmd Msg
-executeRequest auth request = 
-  case request of
-    FetchVideosRequest state ->
-      fetchVideos auth state.userId state
+executeRequest : ApiAuth -> State -> Cmd Msg
+executeRequest auth state =
+  case state.request of
+    FetchVideos {userId} ->
+      fetchVideos auth userId state
 
 errorResponse : Value -> String -> Cmd Msg
 errorResponse session reason =
@@ -210,7 +207,7 @@ videosPath : String -> String
 videosPath userId =
   "/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : ApiAuth -> String -> FetchVideos -> Cmd Msg
+fetchVideos : ApiAuth -> String -> State -> Cmd Msg
 fetchVideos auth userId state =
   Lambda.httpRequest
     { hostname = helixHostname
@@ -219,7 +216,7 @@ fetchVideos auth userId state =
     , headers = oauthHeaders auth
     , tag = "fetchVideos"
     }
-    (Encode.fetchVideos state)
+    (Encode.state state)
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Lambda.event Event

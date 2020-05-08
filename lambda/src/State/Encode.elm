@@ -1,18 +1,27 @@
 module State.Encode exposing
-  ( fetchVideos
+  ( state
   )
 
-import State exposing (FetchVideos, Retry(..), State)
+import State exposing (Retry(..), Request(..), State)
 
 import Json.Encode exposing (..)
 
-fetchVideos : FetchVideos -> State
-fetchVideos state =
+state : State -> Value
+state s =
   object
-    [ ("user_id", string state.userId)
-    , ("should_retry", retry state.shouldRetry)
-    , ("session", state.session)
+    [ ("request", request s.request)
+    , ("should_retry", retry s.shouldRetry)
+    , ("session", s.session)
     ]
+
+request : Request -> Value
+request r =
+  case r of
+    FetchVideos {userId} ->
+      object
+        [ ("request", string "fetchVideos")
+        , ("user_id", string userId)
+        ]
 
 retry : Retry -> Value
 retry shouldRetry =

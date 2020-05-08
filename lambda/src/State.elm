@@ -1,27 +1,28 @@
 module State exposing
   ( Retry(..)
-  , FetchVideos
+  , Request(..)
   , State
   , fetchVideos
   )
 
 import Json.Encode exposing (Value)
 
-type alias State = Value
-
 type Retry
   = Retried
   | WillRetry
 
-type alias FetchVideos =
-  { userId : String
+type Request
+  = FetchVideos { userId: String}
+
+type alias State =
+  { request : Request
   , shouldRetry : Retry
   , session : Value
   }
 
-fetchVideos : String -> Value -> FetchVideos
+fetchVideos : String -> Value -> State
 fetchVideos userId session =
-  { userId = userId
+  { request = FetchVideos {userId = userId}
   , shouldRetry = WillRetry
   , session = session
   }

@@ -1,21 +1,33 @@
 module State.Decode exposing
-  ( fetchVideos
+  ( decodeState
   )
 
-import State exposing (FetchVideos, Retry(..), State)
+import State exposing (Retry(..), Request(..), State)
 
 import Json.Decode exposing (..)
 
-fetchVideos : State -> Result Error FetchVideos
-fetchVideos =
-  decodeValue fetchVideosDecoder
+decodeState : Value -> Result Error State
+decodeState =
+  decodeValue state
 
-fetchVideosDecoder : Decoder FetchVideos
-fetchVideosDecoder =
-  map3 FetchVideos
-    (field "user_id" string)
+state : Decoder State
+state =
+  map3 State
+    (field "request" request)
     (field "should_retry" retry)
     (field "session" value)
+
+request : Decoder Request
+request =
+  (field "request" string)
+    |> andThen (\req ->
+      case req of
+        "fetchVideos" ->
+          (field "user_id" string)
+            |> map (\u -> {userId = u})
+            |> map FetchVideos
+        _ -> fail "unknown request state"
+      )
 
 retry : Decoder Retry
 retry =
