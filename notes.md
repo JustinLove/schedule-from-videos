@@ -1,5 +1,4 @@
 - working plan: aws lambda, node
-  - execute all pending requests?
   - auth error retry
   - frontend handling predecoded timestamps
   - multiple event types

@@ -73,7 +73,7 @@ updateEvent event state model =
             |> step
         Err err ->
           let _ = Debug.log "event error" err in
-          (model, errorResponse state "unrecognized event")
+          (model, errorResponse "unrecognized event" state)
     Lambda.Decrypted (Ok [id, secret]) ->
       let
         env = Env.Plain
@@ -120,6 +120,9 @@ updateEvent event state model =
       let _ = Debug.log ("auth failed" ++ tag) body in
       --let state2 = retried state in
       (model, Cmd.none)
+    Lambda.HttpResponse "fetchToken" (Err err) ->
+      let _ = Debug.log "unable to fetch token" err in
+      withAllRequests (errorResponseState "unable to fetch token") model
     Lambda.HttpResponse tag (Err err) ->
       let _ = Debug.log ("http error " ++ tag) err in
       (model, Cmd.none)
@@ -132,17 +135,17 @@ step model =
         Nothing ->
           (model, fetchToken env)
         Just auth ->
-          executeNextRequest (ApiAuth env.clientId auth) model
+          withAllRequests (executeRequest (ApiAuth env.clientId auth)) model
     Env.Encrypted {clientId, clientSecret} ->
       (model, Lambda.decrypt [clientId, clientSecret])
 
-executeNextRequest : ApiAuth -> Model -> (Model, Cmd Msg)
-executeNextRequest auth model = 
-  case model.pendingRequests of
-    next :: rest ->
-      ({model | pendingRequests = rest}, executeRequest auth next)
-    [] ->
-      (model, Cmd.none)
+withAllRequests : (State -> Cmd Msg) -> Model -> (Model, Cmd Msg)
+withAllRequests f model =
+  ({model | pendingRequests = []}
+  , model.pendingRequests
+    |> List.map f
+    |> Cmd.batch
+  )
 
 executeRequest : ApiAuth -> State -> Cmd Msg
 executeRequest auth state =
@@ -150,9 +153,13 @@ executeRequest auth state =
     FetchVideos {userId} ->
       fetchVideos auth userId state
 
-errorResponse : Value -> String -> Cmd Msg
-errorResponse session reason =
+errorResponse : String -> Value -> Cmd Msg
+errorResponse reason session =
   Lambda.response session (Err reason)
+
+errorResponseState : String -> State -> Cmd Msg
+errorResponseState reason state =
+  errorResponse reason state.session
 
 sendResponse : Result Decode.Error Value -> Value -> Cmd Msg
 sendResponse rsession response =
