@@ -1,5 +1,7 @@
 - working plan: aws lambda, node
   - multiple event types
+    - update lambda
+    - need new gateway events
 
     - id, event only (extension)
     - id, fetch name
@@ -9,6 +11,7 @@
     /videoswithname/userid
     /user/username
 
+  - refactoring
   - check jwt - twitch onAuthorized token
     - https://paste.fuelrats.com/acapajejob.js
   - versioning

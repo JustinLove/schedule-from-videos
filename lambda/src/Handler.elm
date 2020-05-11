@@ -32,7 +32,7 @@ main = Platform.worker
   , subscriptions = subscriptions
   }
 
-init : Decode.Value -> (Model, Cmd msg)
+init : Value -> (Model, Cmd msg)
 init flags =
   case (Env.decode flags) of
     Ok env -> (initialModel env, Cmd.none)
@@ -118,17 +118,15 @@ updateEvent event stateValue model =
             case state.request of
               FetchVideos _ ->
                 ( model
-                , Encode.object
-                  [ ("events", Encode.videos videos)
-                  ]
+                , Encode.videosReply {events = videos}
                   |> sendResponse state.session
                 )
               FetchVideosWithName {userId, userName} ->
                 ( model
-                , Encode.object
-                  [ ("user", Encode.user userId userName)
-                  , ("events", Encode.videos videos)
-                  ]
+                , Encode.videosWithNameReply
+                  { user = { id = userId, name = userName }
+                  , events = videos
+                  }
                   |> sendResponse state.session
                 )
               _ ->
@@ -174,9 +172,7 @@ updateEvent event stateValue model =
             case muser of
               Just user ->
                 ( model
-                , Encode.object
-                  [ ("user", Encode.user user.id user.displayName)
-                  ]
+                , Encode.userReply { user = {id = user.id, name = user.displayName } }
                   |> sendResponse state.session
                 )
               Nothing ->
