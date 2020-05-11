@@ -33,6 +33,11 @@ request r =
         , ("user_id", string userId)
         , ("user_name", string userName)
         ]
+    FetchUser {userName} ->
+      object
+        [ ("request", string "fetchUser")
+        , ("user_name", string userName)
+        ]
 
 retry : Retry -> Value
 retry shouldRetry =

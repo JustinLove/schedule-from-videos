@@ -71,6 +71,12 @@ updateEvent event stateValue model =
             [State.fetchVideosWithName userId stateValue]
           }
             |> step
+        Ok (Event.User {userName}) ->
+          { model | pendingRequests = List.append
+            model.pendingRequests
+            [State.fetchUser userName stateValue]
+          }
+            |> step
         Err err ->
           let _ = Debug.log "event error" err in
           (model, errorResponse "unrecognized event" stateValue)
@@ -155,6 +161,28 @@ updateEvent event stateValue model =
                 (model, errorResponse "user not found" state.session)
           Err err ->
             Debug.todo "unparsable state"
+    Lambda.HttpResponse "fetchUserByName" (Ok json) ->
+      let
+        muser = json
+          |> Decode.decodeValue Helix.users
+          |> Result.mapError (Debug.log "user decode error")
+          |> Result.withDefault []
+          |> List.head
+      in
+        case Decode.decodeState stateValue of
+          Ok state ->
+            case muser of
+              Just user ->
+                ( model
+                , Encode.object
+                  [ ("user", Encode.user user.id user.displayName)
+                  ]
+                  |> sendResponse state.session
+                )
+              Nothing ->
+                (model, errorResponse "user not found" state.session)
+          Err err ->
+            Debug.todo "unparsable state"
     Lambda.HttpResponse tag (Ok json) ->
       let _ = Debug.log ("unknown response " ++ tag) json in
       (model, Cmd.none)
@@ -210,6 +238,8 @@ executeRequest auth state =
       fetchUserById auth userId state
     FetchVideosWithName {userId} ->
       fetchVideos auth userId state
+    FetchUser {userName} ->
+      fetchUserByName auth userName state
 
 errorResponse : String -> Value -> Cmd Msg
 errorResponse reason session =
@@ -268,7 +298,7 @@ helixHostname = "api.twitch.tv"
 
 videosPath : String -> String
 videosPath userId =
-  "/helix/videos?first=1&type=archive&user_id=" ++ userId
+  "/helix/videos?first=100&type=archive&user_id=" ++ userId
 
 fetchVideos : ApiAuth -> String -> State -> Cmd Msg
 fetchVideos auth userId state =
@@ -293,6 +323,21 @@ fetchUserById auth userId state =
     , method = "GET"
     , headers = oauthHeaders auth
     , tag = "fetchUserById"
+    }
+    (Encode.state state)
+
+fetchUserByNamePath : String -> String
+fetchUserByNamePath login =
+  "/helix/users?login=" ++ login
+
+fetchUserByName : ApiAuth -> String -> State -> Cmd Msg
+fetchUserByName auth login state =
+  Lambda.httpRequest
+    { hostname = helixHostname
+    , path =  fetchUserByNamePath login
+    , method = "GET"
+    , headers = oauthHeaders auth
+    , tag = "fetchUserByName"
     }
     (Encode.state state)
 

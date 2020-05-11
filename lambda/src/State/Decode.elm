@@ -36,6 +36,11 @@ request =
               (field "user_id" string)
               (field "user_name" string)
             )
+        "fetchUser" ->
+          map FetchUser
+            (map (\n -> {userName = n})
+              (field "user_name" string)
+            )
         _ -> fail "unknown request state"
       )
 

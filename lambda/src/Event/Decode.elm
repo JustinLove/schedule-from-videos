@@ -8,6 +8,7 @@ import Json.Decode exposing (..)
 type Event
   = Videos { userId : String }
   | VideosWithName { userId : String }
+  | User { userName : String }
 
 event : Decoder Event
 event =
@@ -21,6 +22,10 @@ event =
         (field "user_id" string)
           |> map (\u -> {userId = u})
           |> map VideosWithName
+      "user" ->
+        (field "user_name" string)
+          |> map (\u -> {userName = u})
+          |> map User
       _ ->
         fail ("unknown event " ++ e)
     )

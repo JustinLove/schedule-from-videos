@@ -1,6 +1,5 @@
 - working plan: aws lambda, node
   - multiple event types
-    - partly implemented, need user id lookup
 
     - id, event only (extension)
     - id, fetch name
