@@ -55,19 +55,25 @@ update msg model =
       (model, Cmd.none)
 
 updateEvent : Lambda.Event -> Value -> Model -> (Model, Cmd Msg)
-updateEvent event state model =
+updateEvent event stateValue model =
   case event of
     Lambda.NewEvent data ->
       case Decode.decodeValue Event.event data of
         Ok (Event.Videos {userId}) ->
           { model | pendingRequests = List.append
             model.pendingRequests
-            [State.fetchVideos userId state]
+            [State.fetchVideos userId stateValue]
+          }
+            |> step
+        Ok (Event.VideosWithName {userId}) ->
+          { model | pendingRequests = List.append
+            model.pendingRequests
+            [State.fetchVideosWithName userId stateValue]
           }
             |> step
         Err err ->
           let _ = Debug.log "event error" err in
-          (model, errorResponse "unrecognized event" state)
+          (model, errorResponse "unrecognized event" stateValue)
     Lambda.Decrypted (Ok [id, secret]) ->
       let
         env = Env.Plain
@@ -95,24 +101,66 @@ updateEvent event state model =
         |> step
     Lambda.HttpResponse "fetchVideos" (Ok json) ->
       let
-        session = state
-          |> Decode.decodeState
-          |> Result.map .session
         videos = json
           |> Decode.decodeValue Helix.videos
           |> Result.mapError (Debug.log "video decode error")
           |> Result.withDefault []
           |> List.filter (\v -> v.videoType == Helix.Archive)
-          |> Encode.videos
-          |> (\v -> Encode.object [ ("events", v) ])
       in
-        (model, sendResponse session videos)
+        case Decode.decodeState stateValue of
+          Ok state ->
+            case state.request of
+              FetchVideos _ ->
+                ( model
+                , Encode.object
+                  [ ("events", Encode.videos videos)
+                  ]
+                  |> sendResponse state.session
+                )
+              FetchVideosWithName {userId, userName} ->
+                ( model
+                , Encode.object
+                  [ ("user", Encode.user userId userName)
+                  , ("events", Encode.videos videos)
+                  ]
+                  |> sendResponse state.session
+                )
+              _ ->
+                Debug.todo "videos response in user fetch state"
+          Err err ->
+            Debug.todo "unparsable state"
+    Lambda.HttpResponse "fetchUserById" (Ok json) ->
+      let
+        muser = json
+          |> Decode.decodeValue Helix.users
+          |> Result.mapError (Debug.log "user decode error")
+          |> Result.withDefault []
+          |> List.head
+      in
+        case Decode.decodeState stateValue of
+          Ok state ->
+            case muser of
+              Just user ->
+                { model
+                | pendingRequests = List.append
+                    model.pendingRequests
+                    [{state|request = FetchVideosWithName
+                      { userId = user.id
+                      , userName = user.displayName
+                      }
+                    }]
+                }
+                  |> step
+              Nothing ->
+                (model, errorResponse "user not found" state.session)
+          Err err ->
+            Debug.todo "unparsable state"
     Lambda.HttpResponse tag (Ok json) ->
       let _ = Debug.log ("unknown response " ++ tag) json in
       (model, Cmd.none)
     Lambda.HttpResponse tag (Err (Lambda.BadStatus 401 body)) ->
       let _ = Debug.log ("auth failed " ++ tag) body in
-      case Decode.decodeState state of
+      case Decode.decodeState stateValue of
         Ok s ->
           if s.shouldRetry == WillRetry then
             { model
@@ -158,6 +206,10 @@ executeRequest auth state =
   case state.request of
     FetchVideos {userId} ->
       fetchVideos auth userId state
+    FetchVideosAndName {userId} ->
+      fetchUserById auth userId state
+    FetchVideosWithName {userId} ->
+      fetchVideos auth userId state
 
 errorResponse : String -> Value -> Cmd Msg
 errorResponse reason session =
@@ -167,11 +219,9 @@ errorResponseState : String -> State -> Cmd Msg
 errorResponseState reason state =
   errorResponse reason state.session
 
-sendResponse : Result Decode.Error Value -> Value -> Cmd Msg
-sendResponse rsession response =
-  case rsession of
-    Ok session -> Lambda.response session (Ok response)
-    Err err -> Debug.todo "response did not find session. "
+sendResponse : Value -> Value -> Cmd Msg
+sendResponse session response =
+  Lambda.response session (Ok response)
 
 standardHeaders =
   [ Lambda.header "User-Agent" "Schedule From Videos Lambda"
@@ -218,7 +268,7 @@ helixHostname = "api.twitch.tv"
 
 videosPath : String -> String
 videosPath userId =
-  "/helix/videos?first=100&type=archive&user_id=" ++ userId
+  "/helix/videos?first=1&type=archive&user_id=" ++ userId
 
 fetchVideos : ApiAuth -> String -> State -> Cmd Msg
 fetchVideos auth userId state =
@@ -228,6 +278,21 @@ fetchVideos auth userId state =
     , method = "GET"
     , headers = oauthHeaders auth
     , tag = "fetchVideos"
+    }
+    (Encode.state state)
+
+fetchUserByIdPath : String -> String
+fetchUserByIdPath userId =
+  "/helix/users?id=" ++ userId
+
+fetchUserById : ApiAuth -> String -> State -> Cmd Msg
+fetchUserById auth userId state =
+  Lambda.httpRequest
+    { hostname = helixHostname
+    , path =  fetchUserByIdPath userId
+    , method = "GET"
+    , headers = oauthHeaders auth
+    , tag = "fetchUserById"
     }
     (Encode.state state)
 

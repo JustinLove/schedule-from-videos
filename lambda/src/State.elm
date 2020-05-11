@@ -3,6 +3,7 @@ module State exposing
   , Request(..)
   , State
   , fetchVideos
+  , fetchVideosWithName
   )
 
 import Json.Encode exposing (Value)
@@ -12,7 +13,9 @@ type Retry
   | WillRetry
 
 type Request
-  = FetchVideos { userId: String}
+  = FetchVideos { userId: String }
+  | FetchVideosAndName { userId: String }
+  | FetchVideosWithName { userId: String, userName: String }
 
 type alias State =
   { request : Request
@@ -23,6 +26,13 @@ type alias State =
 fetchVideos : String -> Value -> State
 fetchVideos userId session =
   { request = FetchVideos {userId = userId}
+  , shouldRetry = WillRetry
+  , session = session
+  }
+
+fetchVideosWithName : String -> Value -> State
+fetchVideosWithName userId session =
+  { request = FetchVideosAndName {userId = userId}
   , shouldRetry = WillRetry
   , session = session
   }

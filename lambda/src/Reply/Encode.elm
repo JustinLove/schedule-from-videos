@@ -1,4 +1,4 @@
-module Reply.Encode exposing (videos)
+module Reply.Encode exposing (videos, user)
 
 import Twitch.Helix.Decode as Helix exposing (Video)
 
@@ -14,3 +14,11 @@ video v =
     [ ("created_at", v.createdAt |> Time.posixToMillis |> int)
     , ("duration", v.duration |> int)
     ]
+
+user : String -> String -> Value
+user userId userName =
+  object
+    [ ("id", string userId)
+    , ("name", string userName)
+    ]
+

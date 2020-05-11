@@ -26,6 +26,16 @@ request =
           (field "user_id" string)
             |> map (\u -> {userId = u})
             |> map FetchVideos
+        "fetchVideosAndName" ->
+          (field "user_id" string)
+            |> map (\u -> {userId = u})
+            |> map FetchVideosAndName
+        "fetchVideosWithName" ->
+          map FetchVideosWithName
+            (map2 (\u n -> {userId = u, userName = n})
+              (field "user_id" string)
+              (field "user_name" string)
+            )
         _ -> fail "unknown request state"
       )
 

@@ -1,5 +1,7 @@
 - working plan: aws lambda, node
   - multiple event types
+    - partly implemented, need user id lookup
+
     - id, event only (extension)
     - id, fetch name
     - username
@@ -8,9 +10,12 @@
     /videoswithname/userid
     /user/username
 
+  - check jwt - twitch onAuthorized token
+    - https://paste.fuelrats.com/acapajejob.js
   - versioning
     - api gateway - stages
     - lambda
+      - one lambda per stage
   - cdn
 - https://obsproject.com/tools/browser-drag-and-drop
 - move day labels depending on data location?

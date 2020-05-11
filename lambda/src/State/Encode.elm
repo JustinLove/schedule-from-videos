@@ -22,6 +22,17 @@ request r =
         [ ("request", string "fetchVideos")
         , ("user_id", string userId)
         ]
+    FetchVideosAndName {userId} ->
+      object
+        [ ("request", string "fetchVideosAndName")
+        , ("user_id", string userId)
+        ]
+    FetchVideosWithName {userId,userName} ->
+      object
+        [ ("request", string "fetchVideosWithName")
+        , ("user_id", string userId)
+        , ("user_name", string userName)
+        ]
 
 retry : Retry -> Value
 retry shouldRetry =
