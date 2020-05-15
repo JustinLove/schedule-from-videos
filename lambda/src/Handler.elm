@@ -58,22 +58,10 @@ updateEvent event stateValue model =
   case event of
     Lambda.NewEvent data ->
       case Decode.decodeValue Event.event data of
-        Ok (Event.Videos {userId}) ->
+        Ok ev ->
           { model | pendingRequests = List.append
             model.pendingRequests
-            [State.fetchVideos userId stateValue]
-          }
-            |> step
-        Ok (Event.VideosWithName {userId}) ->
-          { model | pendingRequests = List.append
-            model.pendingRequests
-            [State.fetchVideosWithName userId stateValue]
-          }
-            |> step
-        Ok (Event.User {userName}) ->
-          { model | pendingRequests = List.append
-            model.pendingRequests
-            [State.fetchUser userName stateValue]
+            [stateForEvent ev stateValue]
           }
             |> step
         Err err ->
@@ -203,6 +191,16 @@ updateEvent event stateValue model =
     Lambda.HttpResponse tag (Err err) ->
       let _ = Debug.log ("http error " ++ tag) err in
       (model, Cmd.none)
+
+stateForEvent : Event.Event -> Value -> State
+stateForEvent event session =
+  case event of
+    Event.Videos {userId} ->
+      State.fetchVideos userId session
+    Event.VideosWithName {userId} ->
+      State.fetchVideosWithName userId session
+    Event.User {userName} ->
+      State.fetchUser userName session
 
 step : Model -> (Model, Cmd Msg)
 step model =
