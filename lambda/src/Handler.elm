@@ -27,6 +27,7 @@ type Msg
   | NewEvent State
   | Decrypted Env
   | GotToken (Maybe Secret)
+  | GotVideos (List Helix.Video) State
 
 main = Platform.worker
   { init = init
@@ -63,6 +64,23 @@ update msg model =
     GotToken auth ->
       { model | auth = auth }
         |> step
+    GotVideos videos state ->
+      case state.request of
+        FetchVideos _ ->
+          ( model
+          , Encode.videosReply {events = videos}
+            |> sendResponse state.session
+          )
+        FetchVideosWithName {userId, userName} ->
+          ( model
+          , Encode.videosWithNameReply
+            { user = { id = userId, name = userName }
+            , events = videos
+            }
+            |> sendResponse state.session
+          )
+        _ ->
+          Debug.todo "videos response in user fetch state"
 
 updateEvent : Lambda.Event -> Value -> Model -> (Model, Cmd Msg)
 updateEvent event stateValue model =
@@ -99,29 +117,13 @@ updateEvent event stateValue model =
     Lambda.HttpResponse "fetchVideos" (Ok json) ->
       let
         videos = json
-          |> Decode.decodeValue Helix.videos
+          |> Decode.decodeValue decodeVideos
           |> Result.mapError (Debug.log "video decode error")
           |> Result.withDefault []
-          |> List.filter (\v -> v.videoType == Helix.Archive)
       in
         case Decode.decodeState stateValue of
           Ok state ->
-            case state.request of
-              FetchVideos _ ->
-                ( model
-                , Encode.videosReply {events = videos}
-                  |> sendResponse state.session
-                )
-              FetchVideosWithName {userId, userName} ->
-                ( model
-                , Encode.videosWithNameReply
-                  { user = { id = userId, name = userName }
-                  , events = videos
-                  }
-                  |> sendResponse state.session
-                )
-              _ ->
-                Debug.todo "videos response in user fetch state"
+            update (GotVideos videos state) model
           Err err ->
             Debug.todo "unparsable state"
     Lambda.HttpResponse "fetchUserById" (Ok json) ->
@@ -309,6 +311,11 @@ fetchVideos auth userId state =
     , tag = "fetchVideos"
     }
     (Encode.state state)
+
+decodeVideos : Decode.Decoder (List Helix.Video)
+decodeVideos =
+  Helix.videos
+    |> Decode.map (List.filter (\v -> v.videoType == Helix.Archive))
 
 fetchUserByIdPath : String -> String
 fetchUserByIdPath userId =
