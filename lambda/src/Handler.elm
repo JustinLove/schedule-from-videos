@@ -26,7 +26,7 @@ type Msg
   = Handle (Result Decode.Error Lambda.EventState)
   | NewEvent State
   | Decrypted Env
-  | GotToken (Maybe Secret)
+  | GotToken (Result Lambda.HttpError (Maybe Secret))
   | HttpError String Lambda.HttpError State
   | GotVideos (List Helix.Video) State
   | GotUsersById (List Helix.User) State
@@ -64,9 +64,12 @@ update msg model =
     Decrypted env ->
       { model | env = env }
         |> step
-    GotToken auth ->
+    GotToken (Ok auth) ->
       { model | auth = auth }
         |> step
+    GotToken (Err err) ->
+      let _ = Debug.log "unable to fetch token" err in
+      withAllRequests (errorResponseState "unable to fetch token") model
     HttpError source (Lambda.BadStatus 401 body) state ->
       let _ = Debug.log ("auth failed " ++ source) body in
       if state.shouldRetry == WillRetry then
@@ -147,7 +150,9 @@ updateEvent event stateValue model =
           |> Result.mapError (Debug.log "token decode error")
           |> Result.toMaybe
       in
-        update (GotToken mauth) model
+        update (GotToken (Ok mauth)) model
+    Lambda.HttpResponse "fetchToken" (Err err) ->
+      update (GotToken (Err err)) model
     Lambda.HttpResponse "fetchVideos" (Ok json) ->
       let
         videos = json
@@ -187,9 +192,6 @@ updateEvent event stateValue model =
     Lambda.HttpResponse tag (Ok json) ->
       let _ = Debug.log ("unknown response " ++ tag) json in
       (model, Cmd.none)
-    Lambda.HttpResponse "fetchToken" (Err err) ->
-      let _ = Debug.log "unable to fetch token" err in
-      withAllRequests (errorResponseState "unable to fetch token") model
     Lambda.HttpResponse tag (Err err) ->
       case Decode.decodeState stateValue of
         Ok s ->
