@@ -24,6 +24,7 @@ type alias Model =
 
 type Msg
   = Handle (Result Decode.Error Lambda.EventState)
+  | NewEvent State
 
 main = Platform.worker
   { init = init
@@ -52,6 +53,8 @@ update msg model =
     Handle (Err err) ->
       let _ = Debug.log "error" err in
       (model, Cmd.none)
+    NewEvent state ->
+      appendState state model
 
 updateEvent : Lambda.Event -> Value -> Model -> (Model, Cmd Msg)
 updateEvent event stateValue model =
@@ -59,11 +62,7 @@ updateEvent event stateValue model =
     Lambda.NewEvent data ->
       case Decode.decodeValue Event.event data of
         Ok ev ->
-          { model | pendingRequests = List.append
-            model.pendingRequests
-            [stateForEvent ev stateValue]
-          }
-            |> step
+          update (NewEvent (stateForEvent ev stateValue)) model
         Err err ->
           let _ = Debug.log "event error" err in
           (model, errorResponse "unrecognized event" stateValue)
@@ -132,16 +131,13 @@ updateEvent event stateValue model =
           Ok state ->
             case muser of
               Just user ->
-                { model
-                | pendingRequests = List.append
-                    model.pendingRequests
-                    [{state|request = FetchVideosWithName
+                model
+                  |> appendState 
+                    {state|request = FetchVideosWithName
                       { userId = user.id
                       , userName = user.displayName
                       }
-                    }]
-                }
-                  |> step
+                    }
               Nothing ->
                 (model, errorResponse "user not found" state.session)
           Err err ->
@@ -174,13 +170,8 @@ updateEvent event stateValue model =
       case Decode.decodeState stateValue of
         Ok s ->
           if s.shouldRetry == WillRetry then
-            { model
-            | auth = Nothing
-            , pendingRequests = List.append
-                model.pendingRequests
-                [{s|shouldRetry = Retried}]
-            }
-              |> step
+            { model | auth = Nothing }
+              |> appendState {s|shouldRetry = Retried}
           else
             (model, errorResponse "unable to authenticate" s.session)
         Err err ->
@@ -213,6 +204,11 @@ step model =
           withAllRequests (executeRequest (ApiAuth env.clientId auth)) model
     Env.Encrypted {clientId, clientSecret} ->
       (model, Lambda.decrypt [clientId, clientSecret])
+
+appendState : State -> Model -> (Model, Cmd Msg)
+appendState state model =
+  { model | pendingRequests = List.append model.pendingRequests [state] }
+    |> step
 
 withAllRequests : (State -> Cmd Msg) -> Model -> (Model, Cmd Msg)
 withAllRequests f model =
