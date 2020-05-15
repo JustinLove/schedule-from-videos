@@ -1,4 +1,4 @@
-module Decode exposing (User, Event, user, videos)
+module Decode exposing (User, Event, VideosWithName, user, videos, videosWithName)
 
 import Json.Decode exposing (..)
 import Time exposing (Posix)
@@ -12,6 +12,17 @@ type alias User =
   { id : String
   , name : String
   }
+
+type alias VideosWithName =
+  { user : User
+  , events : List Event
+  }
+
+videosWithName : Decoder VideosWithName
+videosWithName =
+  succeed VideosWithName
+    |> map2 (|>) user
+    |> map2 (|>) videos
 
 videos : Decoder (List Event)
 videos =

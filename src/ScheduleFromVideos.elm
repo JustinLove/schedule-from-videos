@@ -7,9 +7,6 @@ import TwitchId
 import ScheduleGraph exposing (Event)
 import View exposing (Mode(..), Data(..))
 
-import Twitch.Helix.Decode as Helix
-import Twitch.Helix as Helix
-
 import Browser
 import Browser.Dom as Dom
 import Browser.Events
@@ -25,8 +22,8 @@ import Task
 
 type Msg
   = UserForName (Result Http.Error (Decode.User))
-  | UserForId (Result Http.Error (List Helix.User))
   | Videos (Result Http.Error (List Decode.Event))
+  | VideosWithName (Result Http.Error (Decode.VideosWithName))
   | CurrentUrl Url
   | Navigate Browser.UrlRequest
   | CurrentTime Posix
@@ -97,10 +94,7 @@ init flags location key =
       |> Cmd.batch
     , case muserId of
         Just id ->
-          Cmd.batch
-            [ fetchUserById TwitchId.clientId id
-            , fetchVideos id
-            ]
+          fetchVideosWithName id
         Nothing ->
           case mlogin of
             Just login -> fetchUserByName login
@@ -125,17 +119,6 @@ update msg model =
       )
     UserForName (Err error) ->
       ({ model | login = RequestFailed, userId = Unknown }, Cmd.none)
-    UserForId (Ok (user::_)) ->
-      ( { model
-        | login = Data user.login
-        , userId = Data user.id
-        }
-      , Cmd.none
-      )
-    UserForId (Ok _) ->
-      ({ model | login = Unknown, userId = NotFound }, Cmd.none)
-    UserForId (Err error) ->
-      ({ model | login = Unknown, userId = RequestFailed }, Cmd.none)
     Videos (Ok videos) ->
       ( { model
         | events = videos
@@ -144,9 +127,19 @@ update msg model =
         }
       , Cmd.none
       )
-    Videos (Err (Http.BadStatus 503)) ->
-      ({ model | events = NotFound }, Cmd.none)
     Videos (Err error) ->
+      ({ model | events = RequestFailed }, Cmd.none)
+    VideosWithName (Ok {user, events}) ->
+      ( { model
+        | events = events
+          |> List.map (\v -> {start = v.createdAt, duration = v.duration})
+          |> Data
+        , login = Data user.name
+        , userId = Data user.id
+        }
+      , Cmd.none
+      )
+    VideosWithName (Err error) ->
       ({ model | events = RequestFailed }, Cmd.none)
     CurrentUrl location ->
       ( { model | location = location }, Cmd.none)
@@ -204,20 +197,6 @@ fetchUserByName login =
     , expect = Http.expectJson UserForName Decode.user
     }
 
-fetchUserByIdUrl : String -> String
-fetchUserByIdUrl id =
-  "https://api.twitch.tv/helix/users?id=" ++ id
-
-fetchUserById : String -> String -> Cmd Msg
-fetchUserById clientId id =
-  Helix.send <|
-    { clientId = clientId
-    , auth = Nothing
-    , decoder = Helix.users
-    , tagger = UserForId
-    , url = (fetchUserByIdUrl id)
-    }
-
 fetchVideosUrl : String -> String
 fetchVideosUrl userId =
   backendPath ++ "/videos/" ++ userId
@@ -227,6 +206,17 @@ fetchVideos userId =
   Http.get
     { url = (fetchVideosUrl userId)
     , expect = Http.expectJson Videos Decode.videos
+    }
+
+fetchVideosWithNameUrl : String -> String
+fetchVideosWithNameUrl userId =
+  backendPath ++ "/videoswithname/" ++ userId
+
+fetchVideosWithName : String -> Cmd Msg
+fetchVideosWithName userId =
+  Http.get
+    { url = (fetchVideosWithNameUrl userId)
+    , expect = Http.expectJson VideosWithName Decode.videosWithName
     }
 
 extractSearchArgument : String -> Url -> Maybe String
