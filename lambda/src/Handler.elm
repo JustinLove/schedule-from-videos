@@ -26,6 +26,7 @@ type Msg
   = Handle (Result Decode.Error Lambda.EventState)
   | NewEvent State
   | Decrypted Env
+  | GotToken (Maybe Secret)
 
 main = Platform.worker
   { init = init
@@ -59,6 +60,9 @@ update msg model =
     Decrypted env ->
       { model | env = env }
         |> step
+    GotToken auth ->
+      { model | auth = auth }
+        |> step
 
 updateEvent : Lambda.Event -> Value -> Model -> (Model, Cmd Msg)
 updateEvent event stateValue model =
@@ -87,13 +91,11 @@ updateEvent event stateValue model =
     Lambda.HttpResponse "fetchToken" (Ok json) ->
       let
         mauth = json
-          |> Decode.decodeValue Id.appOAuth
-          |> Result.map (.accessToken>>Secret.fromString)
+          |> Decode.decodeValue decodeToken
           |> Result.mapError (Debug.log "token decode error")
           |> Result.toMaybe
       in
-      { model | auth = mauth }
-        |> step
+        update (GotToken mauth) model
     Lambda.HttpResponse "fetchVideos" (Ok json) ->
       let
         videos = json
@@ -285,6 +287,11 @@ fetchToken env =
     , tag = "fetchToken"
     }
     Encode.null
+
+decodeToken : Decode.Decoder Secret
+decodeToken =
+  Id.appOAuth
+    |> Decode.map (.accessToken>>Secret.fromString)
 
 helixHostname = "api.twitch.tv"
 
