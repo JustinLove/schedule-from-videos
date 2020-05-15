@@ -3,7 +3,6 @@ module ScheduleFromVideos exposing (..)
 import Decode
 import MeasureText
 import TwitchExt
-import TwitchId
 import ScheduleGraph exposing (Event)
 import View exposing (Mode(..), Data(..))
 
@@ -37,7 +36,6 @@ type Msg
 type alias Model =
   { location : Url
   , navigationKey : Navigation.Key
-  , clientId : String
   , login : Data String
   , userId : Data String
   , events : Data (List Event)
@@ -68,7 +66,6 @@ init flags location key =
   in
   ( { location = location
     , navigationKey = key
-    , clientId = TwitchId.clientId
     , login = mlogin |> Maybe.map Data |> Maybe.withDefault Unknown
     , userId = muserId |> Maybe.map Data |> Maybe.withDefault Unknown
     , events = Unknown
@@ -161,8 +158,7 @@ update msg model =
       case String.toInt auth.channelId of
         Just _ ->
           ( { model
-            | clientId = auth.clientId
-            , userId = Data auth.channelId
+            | userId = Data auth.channelId
             }
           , fetchVideos auth.channelId
           )
