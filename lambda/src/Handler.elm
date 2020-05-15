@@ -25,6 +25,7 @@ type alias Model =
 type Msg
   = Handle (Result Decode.Error Lambda.EventState)
   | NewEvent State
+  | Decrypted Env
 
 main = Platform.worker
   { init = init
@@ -55,6 +56,9 @@ update msg model =
       (model, Cmd.none)
     NewEvent state ->
       appendState state model
+    Decrypted env ->
+      { model | env = env }
+        |> step
 
 updateEvent : Lambda.Event -> Value -> Model -> (Model, Cmd Msg)
 updateEvent event stateValue model =
@@ -73,8 +77,7 @@ updateEvent event stateValue model =
           , clientSecret = secret
           }
       in
-      { model | env = env }
-        |> step
+        update (Decrypted env) model
     Lambda.Decrypted (Ok _) ->
       let _ = Debug.log ("decrypt wrong number of results ") in
       withAllRequests (errorResponseState "service misconfiguration") model
