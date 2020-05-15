@@ -1,5 +1,6 @@
 module ScheduleFromVideos exposing (..)
 
+import Backend
 import Decode
 import MeasureText
 import TwitchExt
@@ -180,11 +181,9 @@ subscriptions model =
     , MeasureText.textSize TextSize
     ]
 
-backendPath = "https://nwsj6y4eah.execute-api.us-east-1.amazonaws.com/dev"
-
 fetchUserByNameUrl : String -> String
 fetchUserByNameUrl login =
-  backendPath ++ "/user/" ++ login
+  Backend.url ++ "/user/" ++ login
 
 fetchUserByName : String -> Cmd Msg
 fetchUserByName login =
@@ -195,7 +194,7 @@ fetchUserByName login =
 
 fetchVideosUrl : String -> String
 fetchVideosUrl userId =
-  backendPath ++ "/videos/" ++ userId
+  Backend.url ++ "/videos/" ++ userId
 
 fetchVideos : String -> Cmd Msg
 fetchVideos userId =
@@ -206,7 +205,7 @@ fetchVideos userId =
 
 fetchVideosWithNameUrl : String -> String
 fetchVideosWithNameUrl userId =
-  backendPath ++ "/videoswithname/" ++ userId
+  Backend.url ++ "/videoswithname/" ++ userId
 
 fetchVideosWithName : String -> Cmd Msg
 fetchVideosWithName userId =
