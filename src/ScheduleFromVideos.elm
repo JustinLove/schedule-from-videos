@@ -24,7 +24,7 @@ import Time exposing (Posix, Zone)
 import Task
 
 type Msg
-  = UserForName (Result Http.Error (List Helix.User))
+  = UserForName (Result Http.Error (Decode.User))
   | UserForId (Result Http.Error (List Helix.User))
   | Videos (Result Http.Error (List Decode.Event))
   | CurrentUrl Url
@@ -103,16 +103,16 @@ init flags location key =
             ]
         Nothing ->
           case mlogin of
-            Just login -> fetchUserByName TwitchId.clientId login
+            Just login -> fetchUserByName login
             Nothing -> Cmd.none
     ]
   )
 
 update msg model =
   case msg of
-    UserForName (Ok (user::_)) ->
+    UserForName (Ok user) ->
       ( { model
-        | login = Data user.login
+        | login = Data user.name
         , userId = Data user.id
         }
       , Cmd.batch
@@ -123,8 +123,6 @@ update msg model =
             Cmd.none
         ]
       )
-    UserForName (Ok _) ->
-      ({ model | login = NotFound, userId = Unknown }, Cmd.none)
     UserForName (Err error) ->
       ({ model | login = RequestFailed, userId = Unknown }, Cmd.none)
     UserForId (Ok (user::_)) ->
@@ -181,7 +179,7 @@ update msg model =
       ( { model | theme = context.theme }, Cmd.none )
     UI (View.SetUsername username) ->
       ( { model |events = Unknown }
-      , fetchUserByName model.clientId username)
+      , fetchUserByName username)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -193,18 +191,17 @@ subscriptions model =
     , MeasureText.textSize TextSize
     ]
 
+backendPath = "https://nwsj6y4eah.execute-api.us-east-1.amazonaws.com/dev"
+
 fetchUserByNameUrl : String -> String
 fetchUserByNameUrl login =
-  "https://api.twitch.tv/helix/users?login=" ++ login
+  backendPath ++ "/user/" ++ login
 
-fetchUserByName : String -> String -> Cmd Msg
-fetchUserByName clientId login =
-  Helix.send <|
-    { clientId = clientId
-    , auth = Nothing
-    , decoder = Helix.users
-    , tagger = UserForName
-    , url = (fetchUserByNameUrl login)
+fetchUserByName : String -> Cmd Msg
+fetchUserByName login =
+  Http.get
+    { url = (fetchUserByNameUrl login)
+    , expect = Http.expectJson UserForName Decode.user
     }
 
 fetchUserByIdUrl : String -> String
@@ -223,13 +220,13 @@ fetchUserById clientId id =
 
 fetchVideosUrl : String -> String
 fetchVideosUrl userId =
-  "https://nwsj6y4eah.execute-api.us-east-1.amazonaws.com/dev/videos/" ++ userId
+  backendPath ++ "/videos/" ++ userId
 
 fetchVideos : String -> Cmd Msg
 fetchVideos userId =
   Http.get
     { url = (fetchVideosUrl userId)
-    , expect = Http.expectJson Videos Decode.events
+    , expect = Http.expectJson Videos Decode.videos
     }
 
 extractSearchArgument : String -> Url -> Maybe String

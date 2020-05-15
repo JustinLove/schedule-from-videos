@@ -16,7 +16,6 @@ import Json.Decode as Decode exposing (Value)
 import Json.Encode as Encode
 import Platform
 
-
 type alias Model =
   { env : Env
   , auth : Maybe Secret
