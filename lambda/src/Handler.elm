@@ -28,6 +28,7 @@ type Msg
   | Decrypted Env
   | GotToken (Maybe Secret)
   | GotVideos (List Helix.Video) State
+  | GotUsersById (List Helix.User) State
 
 main = Platform.worker
   { init = init
@@ -81,6 +82,18 @@ update msg model =
           )
         _ ->
           Debug.todo "videos response in user fetch state"
+    GotUsersById users state ->
+      case users of
+        user :: _ ->
+          model
+            |> appendState
+              {state|request = FetchVideosWithName
+                { userId = user.id
+                , userName = user.displayName
+                }
+              }
+        [] ->
+          (model, errorResponse "user not found" state.session)
 
 updateEvent : Lambda.Event -> Value -> Model -> (Model, Cmd Msg)
 updateEvent event stateValue model =
@@ -128,25 +141,14 @@ updateEvent event stateValue model =
             Debug.todo "unparsable state"
     Lambda.HttpResponse "fetchUserById" (Ok json) ->
       let
-        muser = json
+        users = json
           |> Decode.decodeValue Helix.users
           |> Result.mapError (Debug.log "user decode error")
           |> Result.withDefault []
-          |> List.head
       in
         case Decode.decodeState stateValue of
           Ok state ->
-            case muser of
-              Just user ->
-                model
-                  |> appendState 
-                    {state|request = FetchVideosWithName
-                      { userId = user.id
-                      , userName = user.displayName
-                      }
-                    }
-              Nothing ->
-                (model, errorResponse "user not found" state.session)
+            update (GotUsersById users state) model
           Err err ->
             Debug.todo "unparsable state"
     Lambda.HttpResponse "fetchUserByName" (Ok json) ->
