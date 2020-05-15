@@ -27,6 +27,7 @@ type Msg
   | NewEvent State
   | Decrypted Env
   | GotToken (Maybe Secret)
+  | HttpError String Lambda.HttpError State
   | GotVideos (List Helix.Video) State
   | GotUsersById (List Helix.User) State
   | GotUsersByName (List Helix.User) State
@@ -66,6 +67,16 @@ update msg model =
     GotToken auth ->
       { model | auth = auth }
         |> step
+    HttpError source (Lambda.BadStatus 401 body) state ->
+      let _ = Debug.log ("auth failed " ++ source) body in
+      if state.shouldRetry == WillRetry then
+        { model | auth = Nothing }
+          |> appendState {state|shouldRetry = Retried}
+      else
+        (model, errorResponse "unable to authenticate" state.session)
+    HttpError source (error) state ->
+      let _ = Debug.log ("http error: " ++ source) error in
+      (model, Cmd.none)
     GotVideos videos state ->
       case state.request of
         FetchVideos _ ->
@@ -176,23 +187,15 @@ updateEvent event stateValue model =
     Lambda.HttpResponse tag (Ok json) ->
       let _ = Debug.log ("unknown response " ++ tag) json in
       (model, Cmd.none)
-    Lambda.HttpResponse tag (Err (Lambda.BadStatus 401 body)) ->
-      let _ = Debug.log ("auth failed " ++ tag) body in
-      case Decode.decodeState stateValue of
-        Ok s ->
-          if s.shouldRetry == WillRetry then
-            { model | auth = Nothing }
-              |> appendState {s|shouldRetry = Retried}
-          else
-            (model, errorResponse "unable to authenticate" s.session)
-        Err err ->
-          Debug.todo "401 on request with non-request state"
     Lambda.HttpResponse "fetchToken" (Err err) ->
       let _ = Debug.log "unable to fetch token" err in
       withAllRequests (errorResponseState "unable to fetch token") model
     Lambda.HttpResponse tag (Err err) ->
-      let _ = Debug.log ("http error " ++ tag) err in
-      (model, Cmd.none)
+      case Decode.decodeState stateValue of
+        Ok s ->
+          update (HttpError tag err s) model
+        Err _ ->
+          Debug.todo "http error on request with non-request state"
 
 stateForEvent : Event.Event -> Value -> State
 stateForEvent event session =
