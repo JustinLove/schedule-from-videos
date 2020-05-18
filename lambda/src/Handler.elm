@@ -36,6 +36,7 @@ type HttpError
   = BadStatus Int String
   | NetworkError
   | BadBody Decode.Error
+  | UnknownResponse
 
 main = Platform.worker
   { init = init
@@ -161,16 +162,7 @@ updateEvent event stateValue model =
     Lambda.HttpResponse tag (Ok body) ->
       case Decode.decodeState stateValue of
         Ok state ->
-          case tag of
-            "fetchVideos" ->
-              update (decodeResponse (expectJson (httpResponse state tag GotVideos) decodeVideos) body) model
-            "fetchUserById" ->
-              update (decodeResponse (expectJson (httpResponse state tag GotUsersById) Helix.users) body) model
-            "fetchUserByName" ->
-              update (decodeResponse (expectJson (httpResponse state tag GotUsersByName) Helix.users) body) model
-            _ ->
-              let _ = Debug.log ("unknown response " ++ tag) body in
-              (model, Cmd.none)
+          update (decodeResponse (httpExpection state tag) body) model
         Err err ->
           Debug.todo "unparsable state"
     Lambda.HttpResponse tag (Err err) ->
@@ -186,13 +178,29 @@ myError error =
     Lambda.BadStatus status body -> BadStatus status body
     Lambda.NetworkError -> NetworkError
 
+httpExpection : State -> String -> Expect Msg
+httpExpection state tag =
+  case tag of
+    "fetchVideos" ->
+      expectJson (httpResponse state tag GotVideos) decodeVideos
+    "fetchUserById" ->
+      expectJson (httpResponse state tag GotUsersById) Helix.users
+    "fetchUserByName" ->
+      expectJson (httpResponse state tag GotUsersByName) Helix.users
+    _ ->
+      ExpectError state tag
+
 decodeResponse : Expect Msg -> String -> Msg
 decodeResponse expect body =
   case expect of
     ExpectJson tagger ->
       tagger body
+    ExpectError state tag ->
+      HttpError state tag UnknownResponse
 
-type Expect msg = ExpectJson (String -> msg)
+type Expect msg
+  = ExpectJson (String -> msg)
+  | ExpectError State String
 
 expectJson : (Result HttpError a -> msg) -> Decode.Decoder a -> Expect msg
 expectJson tagger decoder =
