@@ -19,8 +19,7 @@ import Json.Encode as Encode
 type alias State = Value
 
 type HttpError
-  = BadStatus Int Value
-  | BadBody String
+  = BadStatus Int String
   | NetworkError
 
 type EventState = EventState State Event
@@ -28,7 +27,7 @@ type EventState = EventState State Event
 type Event
   = NewEvent Value
   | Decrypted (Result String (List Secret))
-  | HttpResponse String (Result HttpError Value)
+  | HttpResponse String (Result HttpError String)
 
 event : (Result Decode.Error EventState -> msg) -> Sub msg
 event tagger =
@@ -71,7 +70,7 @@ eventDecoder =
           Decode.map2 HttpResponse
             (Decode.field "tag" Decode.string)
             (Decode.map Ok
-              (Decode.field "body" Decode.value)
+              (Decode.field "body" Decode.string)
             )
         "badStatus" ->
           Decode.map2 HttpResponse
@@ -79,14 +78,8 @@ eventDecoder =
             (Decode.map Err
               (Decode.map2 BadStatus
                 (Decode.field "status" Decode.int)
-                (Decode.field "body" Decode.value)
+                (Decode.field "body" Decode.string)
               )
-            )
-        "badBody" ->
-          Decode.map2 HttpResponse
-            (Decode.field "tag" Decode.string)
-            (Decode.map (Err<<BadBody)
-              (Decode.field "error" Decode.string)
             )
         "networkError" ->
           Decode.map2 HttpResponse

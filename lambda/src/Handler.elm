@@ -143,20 +143,20 @@ updateEvent event stateValue model =
     Lambda.Decrypted (Err err) ->
       let _ = Debug.log ("decrypt error ") err in
       withAllRequests (errorResponseState "service misconfiguration") model
-    Lambda.HttpResponse "fetchToken" (Ok json) ->
+    Lambda.HttpResponse "fetchToken" (Ok body) ->
       let
-        mauth = json
-          |> Decode.decodeValue decodeToken
+        mauth = body
+          |> Decode.decodeString decodeToken
           |> Result.mapError (Debug.log "token decode error")
           |> Result.toMaybe
       in
         update (GotToken (Ok mauth)) model
     Lambda.HttpResponse "fetchToken" (Err err) ->
       update (GotToken (Err err)) model
-    Lambda.HttpResponse "fetchVideos" (Ok json) ->
+    Lambda.HttpResponse "fetchVideos" (Ok body) ->
       let
-        videos = json
-          |> Decode.decodeValue decodeVideos
+        videos = body
+          |> Decode.decodeString decodeVideos
           |> Result.mapError (Debug.log "video decode error")
           |> Result.withDefault []
       in
@@ -165,10 +165,10 @@ updateEvent event stateValue model =
             update (GotVideos state videos) model
           Err err ->
             Debug.todo "unparsable state"
-    Lambda.HttpResponse "fetchUserById" (Ok json) ->
+    Lambda.HttpResponse "fetchUserById" (Ok body) ->
       let
-        users = json
-          |> Decode.decodeValue Helix.users
+        users = body
+          |> Decode.decodeString Helix.users
           |> Result.mapError (Debug.log "user decode error")
           |> Result.withDefault []
       in
@@ -177,10 +177,10 @@ updateEvent event stateValue model =
             update (GotUsersById state users) model
           Err err ->
             Debug.todo "unparsable state"
-    Lambda.HttpResponse "fetchUserByName" (Ok json) ->
+    Lambda.HttpResponse "fetchUserByName" (Ok body) ->
       let
-        users = json
-          |> Decode.decodeValue Helix.users
+        users = body
+          |> Decode.decodeString Helix.users
           |> Result.mapError (Debug.log "user decode error")
           |> Result.withDefault []
       in
@@ -189,8 +189,8 @@ updateEvent event stateValue model =
             update (GotUsersByName state users) model
           Err err ->
             Debug.todo "unparsable state"
-    Lambda.HttpResponse tag (Ok json) ->
-      let _ = Debug.log ("unknown response " ++ tag) json in
+    Lambda.HttpResponse tag (Ok body) ->
+      let _ = Debug.log ("unknown response " ++ tag) body in
       (model, Cmd.none)
     Lambda.HttpResponse tag (Err err) ->
       case Decode.decodeState stateValue of
