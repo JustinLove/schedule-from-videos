@@ -1,16 +1,4 @@
 - working plan: aws lambda, node
-  - multiple event types
-    - update lambda
-    - need new gateway events
-
-    - id, event only (extension)
-    - id, fetch name
-    - username
-
-    /videos/userid
-    /videoswithname/userid
-    /user/username
-
   - refactoring
   - check jwt - twitch onAuthorized token
     - https://paste.fuelrats.com/acapajejob.js
@@ -18,6 +6,8 @@
     - api gateway - stages
     - lambda
       - one lambda per stage
+  - extension
+  - cors
   - cdn
 - https://obsproject.com/tools/browser-drag-and-drop
 - move day labels depending on data location?

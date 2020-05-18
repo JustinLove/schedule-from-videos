@@ -27,10 +27,10 @@ type Msg
   | NewEvent State
   | Decrypted Env
   | GotToken (Result Lambda.HttpError (Maybe Secret))
-  | HttpError String Lambda.HttpError State
-  | GotVideos (List Helix.Video) State
-  | GotUsersById (List Helix.User) State
-  | GotUsersByName (List Helix.User) State
+  | HttpError State String Lambda.HttpError
+  | GotVideos State (List Helix.Video)
+  | GotUsersById State (List Helix.User)
+  | GotUsersByName State (List Helix.User)
 
 main = Platform.worker
   { init = init
@@ -70,17 +70,17 @@ update msg model =
     GotToken (Err err) ->
       let _ = Debug.log "unable to fetch token" err in
       withAllRequests (errorResponseState "unable to fetch token") model
-    HttpError source (Lambda.BadStatus 401 body) state ->
+    HttpError state source (Lambda.BadStatus 401 body) ->
       let _ = Debug.log ("auth failed " ++ source) body in
       if state.shouldRetry == WillRetry then
         { model | auth = Nothing }
           |> appendState {state|shouldRetry = Retried}
       else
         (model, errorResponse "unable to authenticate" state.session)
-    HttpError source (error) state ->
+    HttpError state source (error) ->
       let _ = Debug.log ("http error: " ++ source) error in
       (model, Cmd.none)
-    GotVideos videos state ->
+    GotVideos state videos ->
       case state.request of
         FetchVideos _ ->
           ( model
@@ -97,7 +97,7 @@ update msg model =
           )
         _ ->
           Debug.todo "videos response in user fetch state"
-    GotUsersById users state ->
+    GotUsersById state users ->
       case users of
         user :: _ ->
           model
@@ -109,7 +109,7 @@ update msg model =
               }
         [] ->
           (model, errorResponse "user not found" state.session)
-    GotUsersByName users state ->
+    GotUsersByName state users ->
       case users of
         user :: _ ->
           ( model
@@ -162,7 +162,7 @@ updateEvent event stateValue model =
       in
         case Decode.decodeState stateValue of
           Ok state ->
-            update (GotVideos videos state) model
+            update (GotVideos state videos) model
           Err err ->
             Debug.todo "unparsable state"
     Lambda.HttpResponse "fetchUserById" (Ok json) ->
@@ -174,7 +174,7 @@ updateEvent event stateValue model =
       in
         case Decode.decodeState stateValue of
           Ok state ->
-            update (GotUsersById users state) model
+            update (GotUsersById state users) model
           Err err ->
             Debug.todo "unparsable state"
     Lambda.HttpResponse "fetchUserByName" (Ok json) ->
@@ -186,7 +186,7 @@ updateEvent event stateValue model =
       in
         case Decode.decodeState stateValue of
           Ok state ->
-            update (GotUsersByName users state) model
+            update (GotUsersByName state users) model
           Err err ->
             Debug.todo "unparsable state"
     Lambda.HttpResponse tag (Ok json) ->
@@ -195,7 +195,7 @@ updateEvent event stateValue model =
     Lambda.HttpResponse tag (Err err) ->
       case Decode.decodeState stateValue of
         Ok s ->
-          update (HttpError tag err s) model
+          update (HttpError s tag err) model
         Err _ ->
           Debug.todo "http error on request with non-request state"
 
