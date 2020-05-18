@@ -27,10 +27,15 @@ type Msg
   | NewEvent State
   | Decrypted Env
   | GotToken (Result Lambda.HttpError (Maybe Secret))
-  | HttpError State String Lambda.HttpError
+  | HttpError State String HttpError
   | GotVideos State (List Helix.Video)
   | GotUsersById State (List Helix.User)
   | GotUsersByName State (List Helix.User)
+
+type HttpError
+  = BadStatus Int String
+  | NetworkError
+  | BadBody Decode.Error
 
 main = Platform.worker
   { init = init
@@ -70,7 +75,7 @@ update msg model =
     GotToken (Err err) ->
       let _ = Debug.log "unable to fetch token" err in
       withAllRequests (errorResponseState "unable to fetch token") model
-    HttpError state source (Lambda.BadStatus 401 body) ->
+    HttpError state source (BadStatus 401 body) ->
       let _ = Debug.log ("auth failed " ++ source) body in
       if state.shouldRetry == WillRetry then
         { model | auth = Nothing }
@@ -195,9 +200,15 @@ updateEvent event stateValue model =
     Lambda.HttpResponse tag (Err err) ->
       case Decode.decodeState stateValue of
         Ok s ->
-          update (HttpError s tag err) model
+          update (HttpError s tag (myError err)) model
         Err _ ->
           Debug.todo "http error on request with non-request state"
+
+myError : Lambda.HttpError -> HttpError
+myError error =
+  case error of
+    Lambda.BadStatus status body -> BadStatus status body
+    Lambda.NetworkError -> NetworkError
 
 stateForEvent : Event.Event -> Value -> State
 stateForEvent event session =
