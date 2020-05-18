@@ -158,45 +158,21 @@ updateEvent event stateValue model =
         update (GotToken (Ok mauth)) model
     Lambda.HttpResponse "fetchToken" (Err err) ->
       update (GotToken (Err err)) model
-    Lambda.HttpResponse "fetchVideos" (Ok body) ->
-      let
-        videos = body
-          |> Decode.decodeString decodeVideos
-          |> Result.mapError (Debug.log "video decode error")
-          |> Result.withDefault []
-      in
-        case Decode.decodeState stateValue of
-          Ok state ->
-            update (GotVideos state videos) model
-          Err err ->
-            Debug.todo "unparsable state"
-    Lambda.HttpResponse "fetchUserById" (Ok body) ->
-      let
-        users = body
-          |> Decode.decodeString Helix.users
-          |> Result.mapError (Debug.log "user decode error")
-          |> Result.withDefault []
-      in
-        case Decode.decodeState stateValue of
-          Ok state ->
-            update (GotUsersById state users) model
-          Err err ->
-            Debug.todo "unparsable state"
-    Lambda.HttpResponse "fetchUserByName" (Ok body) ->
-      let
-        users = body
-          |> Decode.decodeString Helix.users
-          |> Result.mapError (Debug.log "user decode error")
-          |> Result.withDefault []
-      in
-        case Decode.decodeState stateValue of
-          Ok state ->
-            update (GotUsersByName state users) model
-          Err err ->
-            Debug.todo "unparsable state"
     Lambda.HttpResponse tag (Ok body) ->
-      let _ = Debug.log ("unknown response " ++ tag) body in
-      (model, Cmd.none)
+      case Decode.decodeState stateValue of
+        Ok state ->
+          case tag of
+            "fetchVideos" ->
+              update (decodeResponse decodeVideos GotVideos state tag body) model
+            "fetchUserById" ->
+              update (decodeResponse Helix.users GotUsersById state tag body) model
+            "fetchUserByName" ->
+              update (decodeResponse Helix.users GotUsersByName state tag body) model
+            _ ->
+              let _ = Debug.log ("unknown response " ++ tag) body in
+              (model, Cmd.none)
+        Err err ->
+          Debug.todo "unparsable state"
     Lambda.HttpResponse tag (Err err) ->
       case Decode.decodeState stateValue of
         Ok s ->
@@ -209,6 +185,14 @@ myError error =
   case error of
     Lambda.BadStatus status body -> BadStatus status body
     Lambda.NetworkError -> NetworkError
+
+decodeResponse : Decode.Decoder a -> (State -> a -> Msg) -> State -> String -> String -> Msg
+decodeResponse decoder tagger state tag body =
+  case Decode.decodeString decoder body of
+    Ok videos ->
+      tagger state videos
+    Err err ->
+      HttpError state tag (BadBody err)
 
 stateForEvent : Event.Event -> Value -> State
 stateForEvent event session =
