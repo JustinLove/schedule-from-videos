@@ -163,11 +163,11 @@ updateEvent event stateValue model =
         Ok state ->
           case tag of
             "fetchVideos" ->
-              update (decodeResponse decodeVideos GotVideos state tag body) model
+              update (decodeResponse (expectJson (httpResponse state tag GotVideos) decodeVideos) body) model
             "fetchUserById" ->
-              update (decodeResponse Helix.users GotUsersById state tag body) model
+              update (decodeResponse (expectJson (httpResponse state tag GotUsersById) Helix.users) body) model
             "fetchUserByName" ->
-              update (decodeResponse Helix.users GotUsersByName state tag body) model
+              update (decodeResponse (expectJson (httpResponse state tag GotUsersByName) Helix.users) body) model
             _ ->
               let _ = Debug.log ("unknown response " ++ tag) body in
               (model, Cmd.none)
@@ -186,13 +186,26 @@ myError error =
     Lambda.BadStatus status body -> BadStatus status body
     Lambda.NetworkError -> NetworkError
 
-decodeResponse : Decode.Decoder a -> (State -> a -> Msg) -> State -> String -> String -> Msg
-decodeResponse decoder tagger state tag body =
-  case Decode.decodeString decoder body of
-    Ok videos ->
-      tagger state videos
-    Err err ->
-      HttpError state tag (BadBody err)
+decodeResponse : Expect Msg -> String -> Msg
+decodeResponse expect body =
+  case expect of
+    ExpectJson tagger ->
+      tagger body
+
+type Expect msg = ExpectJson (String -> msg)
+
+expectJson : (Result HttpError a -> msg) -> Decode.Decoder a -> Expect msg
+expectJson tagger decoder =
+  ExpectJson (Decode.decodeString decoder
+    >> Result.mapError BadBody
+    >> tagger
+  )
+
+httpResponse : State -> String -> (State -> a -> Msg) -> Result HttpError a -> Msg
+httpResponse state source success result =
+  case result of
+    Ok value -> success state value
+    Err err -> HttpError state source err
 
 stateForEvent : Event.Event -> Value -> State
 stateForEvent event session =
