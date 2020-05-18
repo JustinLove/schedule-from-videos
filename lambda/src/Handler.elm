@@ -26,7 +26,7 @@ type Msg
   = Handle (Result Decode.Error Lambda.EventState)
   | NewEvent State
   | Decrypted Env
-  | GotToken (Result Lambda.HttpError (Maybe Secret))
+  | GotToken (Result HttpError (Maybe Secret))
   | HttpError State String HttpError
   | GotVideos State (List Helix.Video)
   | GotUsersById State (List Helix.User)
@@ -85,7 +85,7 @@ update msg model =
         (model, errorResponse "unable to authenticate" state.session)
     HttpError state source (error) ->
       let _ = Debug.log ("http error: " ++ source) error in
-      (model, Cmd.none)
+      (model, errorResponse "service http error" state.session)
     GotVideos state videos ->
       case state.request of
         FetchVideos _ ->
@@ -158,7 +158,7 @@ updateEvent event stateValue model =
       in
         update (GotToken (Ok mauth)) model
     Lambda.HttpResponse "fetchToken" (Err err) ->
-      update (GotToken (Err err)) model
+      update (GotToken (Err (myError err))) model
     Lambda.HttpResponse tag (Ok body) ->
       case Decode.decodeState stateValue of
         Ok state ->
@@ -190,6 +190,12 @@ httpExpection state tag =
     _ ->
       ExpectError state tag
 
+httpResponse : State -> String -> (State -> a -> Msg) -> Result HttpError a -> Msg
+httpResponse state source success result =
+  case result of
+    Ok value -> success state value
+    Err err -> HttpError state source err
+
 decodeResponse : Expect Msg -> String -> Msg
 decodeResponse expect body =
   case expect of
@@ -208,12 +214,6 @@ expectJson tagger decoder =
     >> Result.mapError BadBody
     >> tagger
   )
-
-httpResponse : State -> String -> (State -> a -> Msg) -> Result HttpError a -> Msg
-httpResponse state source success result =
-  case result of
-    Ok value -> success state value
-    Err err -> HttpError state source err
 
 stateForEvent : Event.Event -> Value -> State
 stateForEvent event session =
