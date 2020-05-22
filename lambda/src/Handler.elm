@@ -21,7 +21,7 @@ type alias Model =
   { env : Env
   , auth : Maybe Secret
   , nextRequestId : RequestId
-  , outstandingRequests : Dict Int State
+  , outstandingRequests : Dict Int (Expect Msg)
   , pendingRequests : List State
   }
 
@@ -167,8 +167,8 @@ updateEvent event stateValue model =
     Lambda.HttpResponse "fetchToken" (Err err) ->
       update (GotToken (Err (myError err))) model
     Lambda.HttpResponse tag result ->
-      let (state, m2) = httpMatch stateValue model in
-      update (decodeResponse (httpExpectation state tag) (Result.mapError myError result)) m2
+      let (expect, m2) = httpMatch stateValue model in
+      update (decodeResponse expect (Result.mapError myError result)) m2
 
 myError : Lambda.HttpError -> HttpError
 myError error =
@@ -176,51 +176,36 @@ myError error =
     Lambda.BadStatus status body -> BadStatus status body
     Lambda.NetworkError -> NetworkError
 
-httpExpectation : State -> String -> Expect Msg
-httpExpectation state tag =
-  case tag of
-    "fetchVideos" ->
-      expectJson (httpResponse state "fetchVideos" GotVideos) decodeVideos
-    "fetchUserById" ->
-      expectJson (httpResponse state "fetchUserById" GotUsersById) Helix.users
-    "fetchUserByName" ->
-      expectJson (httpResponse state "fetchUserByName" GotUsersByName) Helix.users
-    _ ->
-      ExpectError state tag
-
 httpResponse : State -> String -> (State -> a -> Msg) -> Result HttpError a -> Msg
 httpResponse state source success result =
   case result of
     Ok value -> success state value
     Err err -> HttpError state source err
 
-decodeResponse : Expect Msg -> Result HttpError String -> Msg
+decodeResponse : Expect msg -> Result HttpError String -> msg
 decodeResponse expect response =
   case expect of
-    ExpectJson decodeTagger ->
+    ExpectString decodeTagger ->
       decodeTagger response
-    ExpectError state tag ->
-      HttpError state tag UnknownResponse
 
 type Expect msg
-  = ExpectJson (Result HttpError String -> msg)
-  | ExpectError State String
+  = ExpectString (Result HttpError String -> msg)
 
 expectJson : (Result HttpError a -> msg) -> Decode.Decoder a -> Expect msg
 expectJson tagger decoder =
-  ExpectJson (Result.andThen (Decode.decodeString decoder >> Result.mapError BadBody)
+  ExpectString (Result.andThen (Decode.decodeString decoder >> Result.mapError BadBody)
     >> tagger
   )
 
-httpMatch : Value -> Model -> (State, Model)
+httpMatch : Value -> Model -> (Expect Msg, Model)
 httpMatch stateValue model =
   case Decode.decodeValue Decode.int stateValue of
     Ok id ->
       case Dict.get id model.outstandingRequests of
-        Just state ->
-          (state, { model | outstandingRequests = Dict.remove id model.outstandingRequests })
+        Just expect ->
+          (expect, { model | outstandingRequests = Dict.remove id model.outstandingRequests })
         Nothing ->
-          Debug.todo "response to missing state"
+          Debug.todo "response to unknown request"
     Err err ->
       Debug.todo "unparsable http id"
 
@@ -273,7 +258,7 @@ executeRequest auth state model =
   in
   ( { model
     | nextRequestId = id
-    , outstandingRequests = Dict.insert id state model.outstandingRequests
+    , outstandingRequests = Dict.insert id req.expect model.outstandingRequests
     }
   , toLambdaRequest id req
   )
