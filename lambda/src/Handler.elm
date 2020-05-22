@@ -6,12 +6,13 @@ import Lambda
 import Reply.Encode as Encode
 import Secret exposing (Secret)
 import State exposing (Retry(..), Request(..), State)
-import State.Decode as Decode
-import State.Encode as Encode
+--import State.Decode as Decode
+--import State.Encode as Encode
 
 import Twitch.Id.Decode as Id
 import Twitch.Helix.Decode as Helix
 
+import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Value)
 import Json.Encode as Encode
 import Platform
@@ -19,8 +20,12 @@ import Platform
 type alias Model =
   { env : Env
   , auth : Maybe Secret
+  , nextRequestId : RequestId
+  , outstandingRequests : Dict Int State
   , pendingRequests : List State
   }
+
+type alias RequestId = Int
 
 type Msg
   = Handle (Result Decode.Error Lambda.EventState)
@@ -54,6 +59,8 @@ initialModel : Env -> Model
 initialModel env =
   { env = env
   , auth = Nothing
+  , nextRequestId = 0
+  , outstandingRequests = Dict.empty
   , pendingRequests = []
   }
 
@@ -160,17 +167,11 @@ updateEvent event stateValue model =
     Lambda.HttpResponse "fetchToken" (Err err) ->
       update (GotToken (Err (myError err))) model
     Lambda.HttpResponse tag (Ok body) ->
-      case Decode.decodeState stateValue of
-        Ok state ->
-          update (decodeResponse (httpExpection state tag) body) model
-        Err err ->
-          Debug.todo "unparsable state"
+      let (state, m2) = httpMatch stateValue model in
+      update (decodeResponse (httpExpection state tag) body) m2
     Lambda.HttpResponse tag (Err err) ->
-      case Decode.decodeState stateValue of
-        Ok s ->
-          update (HttpError s tag (myError err)) model
-        Err _ ->
-          Debug.todo "http error on request with non-request state"
+      let (state, m2) = httpMatch stateValue model in
+      update (HttpError state tag (myError err)) m2
 
 myError : Lambda.HttpError -> HttpError
 myError error =
@@ -215,6 +216,18 @@ expectJson tagger decoder =
     >> tagger
   )
 
+httpMatch : Value -> Model -> (State, Model)
+httpMatch stateValue model =
+  case Decode.decodeValue Decode.int stateValue of
+    Ok id ->
+      case Dict.get id model.outstandingRequests of
+        Just state ->
+          (state, { model | outstandingRequests = Dict.remove id model.outstandingRequests })
+        Nothing ->
+          Debug.todo "response to missing state"
+    Err err ->
+      Debug.todo "unparsable http id"
+
 stateForEvent : Event.Event -> Value -> State
 stateForEvent event session =
   case event of
@@ -242,33 +255,49 @@ appendState state model =
   { model | pendingRequests = List.append model.pendingRequests [state] }
     |> step
 
-withAllRequests : (State -> Cmd Msg) -> Model -> (Model, Cmd Msg)
+withAllRequests : (State -> Model -> (Model, Cmd Msg)) -> Model -> (Model, Cmd Msg)
 withAllRequests f model =
-  ({model | pendingRequests = []}
-  , model.pendingRequests
-    |> List.map f
-    |> Cmd.batch
+  model.pendingRequests
+    |> List.foldl (commandFold f) ({model | pendingRequests = []}, Cmd.none)
+
+commandFold
+  : (a -> Model -> (Model, Cmd Msg))
+  -> a
+  -> (Model, Cmd Msg)
+  -> (Model, Cmd Msg)
+commandFold f a (model, cmd) =
+  let (m, c) = f a model in
+  (m, Cmd.batch [cmd, c])
+
+executeRequest : ApiAuth -> State -> Model -> (Model, Cmd Msg)
+executeRequest auth state model =
+  let id = model.nextRequestId + 1 in
+  ( { model
+    | nextRequestId = id
+    , outstandingRequests = Dict.insert id state model.outstandingRequests
+    }
+  , stateCmd auth state id
   )
 
-executeRequest : ApiAuth -> State -> Cmd Msg
-executeRequest auth state =
+stateCmd : ApiAuth -> State -> RequestId -> Cmd Msg
+stateCmd auth state id =
   case state.request of
     FetchVideos {userId} ->
-      fetchVideos auth userId state
+      fetchVideos auth userId id
     FetchVideosAndName {userId} ->
-      fetchUserById auth userId state
+      fetchUserById auth userId id
     FetchVideosWithName {userId} ->
-      fetchVideos auth userId state
+      fetchVideos auth userId id
     FetchUser {userName} ->
-      fetchUserByName auth userName state
+      fetchUserByName auth userName id
 
 errorResponse : String -> Value -> Cmd Msg
 errorResponse reason session =
   Lambda.response session (Err reason)
 
-errorResponseState : String -> State -> Cmd Msg
-errorResponseState reason state =
-  errorResponse reason state.session
+errorResponseState : String -> State -> Model -> (Model, Cmd Msg)
+errorResponseState reason state model =
+  (model, errorResponse reason state.session)
 
 sendResponse : Value -> Value -> Cmd Msg
 sendResponse session response =
@@ -326,8 +355,8 @@ videosPath : String -> String
 videosPath userId =
   "/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : ApiAuth -> String -> State -> Cmd Msg
-fetchVideos auth userId state =
+fetchVideos : ApiAuth -> String -> RequestId -> Cmd Msg
+fetchVideos auth userId id =
   Lambda.httpRequest
     { hostname = helixHostname
     , path = videosPath userId
@@ -335,7 +364,7 @@ fetchVideos auth userId state =
     , headers = oauthHeaders auth
     , tag = "fetchVideos"
     }
-    (Encode.state state)
+    (Encode.int id)
 
 decodeVideos : Decode.Decoder (List Helix.Video)
 decodeVideos =
@@ -346,8 +375,8 @@ fetchUserByIdPath : String -> String
 fetchUserByIdPath userId =
   "/helix/users?id=" ++ userId
 
-fetchUserById : ApiAuth -> String -> State -> Cmd Msg
-fetchUserById auth userId state =
+fetchUserById : ApiAuth -> String -> RequestId -> Cmd Msg
+fetchUserById auth userId id =
   Lambda.httpRequest
     { hostname = helixHostname
     , path =  fetchUserByIdPath userId
@@ -355,14 +384,14 @@ fetchUserById auth userId state =
     , headers = oauthHeaders auth
     , tag = "fetchUserById"
     }
-    (Encode.state state)
+    (Encode.int id)
 
 fetchUserByNamePath : String -> String
 fetchUserByNamePath login =
   "/helix/users?login=" ++ login
 
-fetchUserByName : ApiAuth -> String -> State -> Cmd Msg
-fetchUserByName auth login state =
+fetchUserByName : ApiAuth -> String -> RequestId -> Cmd Msg
+fetchUserByName auth login id =
   Lambda.httpRequest
     { hostname = helixHostname
     , path =  fetchUserByNamePath login
@@ -370,7 +399,7 @@ fetchUserByName auth login state =
     , headers = oauthHeaders auth
     , tag = "fetchUserByName"
     }
-    (Encode.state state)
+    (Encode.int id)
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Lambda.event Handle
