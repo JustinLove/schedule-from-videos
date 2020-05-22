@@ -166,12 +166,9 @@ updateEvent event stateValue model =
         update (GotToken (Ok mauth)) model
     Lambda.HttpResponse "fetchToken" (Err err) ->
       update (GotToken (Err (myError err))) model
-    Lambda.HttpResponse tag (Ok body) ->
+    Lambda.HttpResponse tag result ->
       let (state, m2) = httpMatch stateValue model in
-      update (decodeResponse (httpExpection state tag) body) m2
-    Lambda.HttpResponse tag (Err err) ->
-      let (state, m2) = httpMatch stateValue model in
-      update (HttpError state tag (myError err)) m2
+      update (decodeResponse (httpExpectation state tag) (Result.mapError myError result)) m2
 
 myError : Lambda.HttpError -> HttpError
 myError error =
@@ -179,15 +176,15 @@ myError error =
     Lambda.BadStatus status body -> BadStatus status body
     Lambda.NetworkError -> NetworkError
 
-httpExpection : State -> String -> Expect Msg
-httpExpection state tag =
+httpExpectation : State -> String -> Expect Msg
+httpExpectation state tag =
   case tag of
     "fetchVideos" ->
-      expectJson (httpResponse state tag GotVideos) decodeVideos
+      expectJson (httpResponse state "fetchVideos" GotVideos) decodeVideos
     "fetchUserById" ->
-      expectJson (httpResponse state tag GotUsersById) Helix.users
+      expectJson (httpResponse state "fetchUserById" GotUsersById) Helix.users
     "fetchUserByName" ->
-      expectJson (httpResponse state tag GotUsersByName) Helix.users
+      expectJson (httpResponse state "fetchUserByName" GotUsersByName) Helix.users
     _ ->
       ExpectError state tag
 
@@ -197,22 +194,21 @@ httpResponse state source success result =
     Ok value -> success state value
     Err err -> HttpError state source err
 
-decodeResponse : Expect Msg -> String -> Msg
-decodeResponse expect body =
+decodeResponse : Expect Msg -> Result HttpError String -> Msg
+decodeResponse expect response =
   case expect of
-    ExpectJson tagger ->
-      tagger body
+    ExpectJson decodeTagger ->
+      decodeTagger response
     ExpectError state tag ->
       HttpError state tag UnknownResponse
 
 type Expect msg
-  = ExpectJson (String -> msg)
+  = ExpectJson (Result HttpError String -> msg)
   | ExpectError State String
 
 expectJson : (Result HttpError a -> msg) -> Decode.Decoder a -> Expect msg
 expectJson tagger decoder =
-  ExpectJson (Decode.decodeString decoder
-    >> Result.mapError BadBody
+  ExpectJson (Result.andThen (Decode.decodeString decoder >> Result.mapError BadBody)
     >> tagger
   )
 
@@ -271,25 +267,28 @@ commandFold f a (model, cmd) =
 
 executeRequest : ApiAuth -> State -> Model -> (Model, Cmd Msg)
 executeRequest auth state model =
-  let id = model.nextRequestId + 1 in
+  let
+    id = model.nextRequestId + 1
+    req = stateRequest auth state
+  in
   ( { model
     | nextRequestId = id
     , outstandingRequests = Dict.insert id state model.outstandingRequests
     }
-  , stateCmd auth state id
+  , toLambdaRequest id req
   )
 
-stateCmd : ApiAuth -> State -> RequestId -> Cmd Msg
-stateCmd auth state id =
+stateRequest : ApiAuth -> State -> HttpRequest
+stateRequest auth state =
   case state.request of
     FetchVideos {userId} ->
-      fetchVideos auth userId id
+      fetchVideos auth userId state
     FetchVideosAndName {userId} ->
-      fetchUserById auth userId id
+      fetchUserById auth userId state
     FetchVideosWithName {userId} ->
-      fetchVideos auth userId id
+      fetchVideos auth userId state
     FetchUser {userName} ->
-      fetchUserByName auth userName id
+      fetchUserByName auth userName state
 
 errorResponse : String -> Value -> Cmd Msg
 errorResponse reason session =
@@ -302,6 +301,29 @@ errorResponseState reason state model =
 sendResponse : Value -> Value -> Cmd Msg
 sendResponse session response =
   Lambda.response session (Ok response)
+
+type alias HttpRequest =
+  { hostname : String
+  , path : String
+  , method : String
+  , headers : List Lambda.Header
+  , tag : String
+  , expect : Expect Msg
+  }
+
+httpRequest : HttpRequest -> HttpRequest
+httpRequest = identity
+
+toLambdaRequest : RequestId -> HttpRequest -> Cmd Msg
+toLambdaRequest id req =
+  Lambda.httpRequest
+    { hostname = req.hostname
+    , path = req.path
+    , method = req.method
+    , headers = req.headers
+    , tag = req.tag
+    }
+    (Encode.int id)
 
 standardHeaders =
   [ Lambda.header "User-Agent" "Schedule From Videos Lambda"
@@ -355,16 +377,16 @@ videosPath : String -> String
 videosPath userId =
   "/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : ApiAuth -> String -> RequestId -> Cmd Msg
-fetchVideos auth userId id =
-  Lambda.httpRequest
+fetchVideos : ApiAuth -> String -> State -> HttpRequest
+fetchVideos auth userId state =
+  httpRequest
     { hostname = helixHostname
     , path = videosPath userId
     , method = "GET"
     , headers = oauthHeaders auth
     , tag = "fetchVideos"
+    , expect = expectJson (httpResponse state "fetchVideos" GotVideos) decodeVideos
     }
-    (Encode.int id)
 
 decodeVideos : Decode.Decoder (List Helix.Video)
 decodeVideos =
@@ -375,31 +397,31 @@ fetchUserByIdPath : String -> String
 fetchUserByIdPath userId =
   "/helix/users?id=" ++ userId
 
-fetchUserById : ApiAuth -> String -> RequestId -> Cmd Msg
-fetchUserById auth userId id =
-  Lambda.httpRequest
+fetchUserById : ApiAuth -> String -> State -> HttpRequest
+fetchUserById auth userId state =
+  httpRequest
     { hostname = helixHostname
     , path =  fetchUserByIdPath userId
     , method = "GET"
     , headers = oauthHeaders auth
     , tag = "fetchUserById"
+    , expect = expectJson (httpResponse state "fetchUserById" GotUsersById) Helix.users
     }
-    (Encode.int id)
 
 fetchUserByNamePath : String -> String
 fetchUserByNamePath login =
   "/helix/users?login=" ++ login
 
-fetchUserByName : ApiAuth -> String -> RequestId -> Cmd Msg
-fetchUserByName auth login id =
-  Lambda.httpRequest
+fetchUserByName : ApiAuth -> String -> State -> HttpRequest
+fetchUserByName auth login state =
+  httpRequest
     { hostname = helixHostname
     , path =  fetchUserByNamePath login
     , method = "GET"
     , headers = oauthHeaders auth
     , tag = "fetchUserByName"
+    , expect = expectJson (httpResponse state "fetchUserByName" GotUsersByName) Helix.users
     }
-    (Encode.int id)
 
 subscriptions : Model -> Sub Msg
 subscriptions model = Lambda.event Handle

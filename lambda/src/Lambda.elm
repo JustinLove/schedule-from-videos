@@ -7,6 +7,7 @@ port module Lambda exposing
   , decrypt
   , Header
   , header
+  , HttpRequest
   , httpRequest
   , response
   )
@@ -114,15 +115,15 @@ encodeHeader (Header name value) =
 encodeHeaders : List Header -> Value
 encodeHeaders = (List.map encodeHeader) >> Encode.object
 
-httpRequest :
+type alias HttpRequest =
   { hostname : String
   , path : String
   , method : String
   , headers : List Header
   , tag : String
   }
-  -> Value
-  -> Cmd msg
+
+httpRequest : HttpRequest -> Value -> Cmd msg
 httpRequest req state =
   Encode.object
     [ ("kind", Encode.string "httpRequest")
