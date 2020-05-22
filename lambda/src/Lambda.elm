@@ -28,7 +28,7 @@ type EventState = EventState State Event
 type Event
   = NewEvent Value
   | Decrypted (Result String (List Secret))
-  | HttpResponse String (Result HttpError String)
+  | HttpResponse Int (Result HttpError String)
 
 event : (Result Decode.Error EventState -> msg) -> Sub msg
 event tagger =
@@ -69,13 +69,13 @@ eventDecoder =
             )
         "httpResponse" ->
           Decode.map2 HttpResponse
-            (Decode.field "tag" Decode.string)
+            (Decode.field "id" Decode.int)
             (Decode.map Ok
               (Decode.field "body" Decode.string)
             )
         "badStatus" ->
           Decode.map2 HttpResponse
-            (Decode.field "tag" Decode.string)
+            (Decode.field "id" Decode.int)
             (Decode.map Err
               (Decode.map2 BadStatus
                 (Decode.field "status" Decode.int)
@@ -84,7 +84,7 @@ eventDecoder =
             )
         "networkError" ->
           Decode.map2 HttpResponse
-            (Decode.field "tag" Decode.string)
+            (Decode.field "id" Decode.int)
             (Decode.succeed (Err NetworkError))
         _ -> Decode.fail kind
     )
@@ -120,7 +120,7 @@ type alias HttpRequest =
   , path : String
   , method : String
   , headers : List Header
-  , tag : String
+  , id : Int
   }
 
 httpRequest : HttpRequest -> Value -> Cmd msg
@@ -133,7 +133,7 @@ httpRequest req state =
       , ("path", Encode.string req.path)
       , ("method", Encode.string req.method)
       , ("headers", encodeHeaders req.headers)
-      , ("tag", Encode.string req.tag)
+      , ("id", Encode.int req.id)
       ])
     ]
     |> lambdaCommand

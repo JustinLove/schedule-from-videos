@@ -74,7 +74,7 @@ var httpRequest = function(info, state) {
     headers: info.headers,
     timeout: 5000,
   }, function(res) {
-    console.log('request response', info.tag, res.statusCode);
+    console.log('request response', info.id, res.statusCode);
 
     let rawData = '';
     res.on('data', (chunk) => { rawData += chunk; });
@@ -83,7 +83,7 @@ var httpRequest = function(info, state) {
         app.ports.lambdaEvent.send({
           kind: 'httpResponse',
           state: state,
-          tag: info.tag,
+          id: info.id,
           body: rawData,
         })
       } else {
@@ -91,7 +91,7 @@ var httpRequest = function(info, state) {
         app.ports.lambdaEvent.send({
           kind: 'badStatus',
           state: state,
-          tag: info.tag,
+          id: info.id,
           status: res.statusCode,
           body: rawData,
         })
@@ -104,7 +104,7 @@ var httpRequest = function(info, state) {
     app.ports.lambdaEvent.send({
       kind: 'networkError',
       state: state,
-      tag: info.tag,
+      id: info.id,
       error: err,
     })
   })

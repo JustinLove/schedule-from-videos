@@ -156,8 +156,8 @@ updateEvent event stateValue model =
     Lambda.Decrypted (Err err) ->
       let _ = Debug.log ("decrypt error ") err in
       withAllRequests (errorResponseState "service misconfiguration") model
-    Lambda.HttpResponse tag result ->
-      let (expect, m2) = httpMatch stateValue model in
+    Lambda.HttpResponse id result ->
+      let (expect, m2) = httpMatch id model in
       update (decodeResponse expect (Result.mapError myError result)) m2
 
 myError : Lambda.HttpError -> HttpError
@@ -187,17 +187,13 @@ expectJson tagger decoder =
     >> tagger
   )
 
-httpMatch : Value -> Model -> (Expect Msg, Model)
-httpMatch stateValue model =
-  case Decode.decodeValue Decode.int stateValue of
-    Ok id ->
-      case Dict.get id model.outstandingRequests of
-        Just expect ->
-          (expect, { model | outstandingRequests = Dict.remove id model.outstandingRequests })
-        Nothing ->
-          Debug.todo "response to unknown request"
-    Err err ->
-      Debug.todo "unparsable http id"
+httpMatch : Int -> Model -> (Expect Msg, Model)
+httpMatch id model =
+  case Dict.get id model.outstandingRequests of
+    Just expect ->
+      (expect, { model | outstandingRequests = Dict.remove id model.outstandingRequests })
+    Nothing ->
+      Debug.todo "response to unknown request"
 
 stateForEvent : Event.Event -> Value -> State
 stateForEvent event session =
@@ -285,7 +281,6 @@ type alias HttpRequest =
   , path : String
   , method : String
   , headers : List Lambda.Header
-  , tag : String
   , expect : Expect Msg
   }
 
@@ -299,7 +294,7 @@ toLambdaRequest id req =
     , path = req.path
     , method = req.method
     , headers = req.headers
-    , tag = req.tag
+    , id = id
     }
     (Encode.int id)
 
@@ -340,7 +335,6 @@ fetchToken env =
     , path = tokenPath env
     , method = "POST"
     , headers = standardHeaders
-    , tag = "fetchToken"
     , expect = expectJson GotToken decodeToken
     }
 
@@ -362,7 +356,6 @@ fetchVideos auth userId state =
     , path = videosPath userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , tag = "fetchVideos"
     , expect = expectJson (httpResponse state "fetchVideos" GotVideos) decodeVideos
     }
 
@@ -382,7 +375,6 @@ fetchUserById auth userId state =
     , path =  fetchUserByIdPath userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , tag = "fetchUserById"
     , expect = expectJson (httpResponse state "fetchUserById" GotUsersById) Helix.users
     }
 
@@ -397,7 +389,6 @@ fetchUserByName auth login state =
     , path =  fetchUserByNamePath login
     , method = "GET"
     , headers = oauthHeaders auth
-    , tag = "fetchUserByName"
     , expect = expectJson (httpResponse state "fetchUserByName" GotUsersByName) Helix.users
     }
 
