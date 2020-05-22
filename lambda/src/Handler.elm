@@ -28,7 +28,7 @@ type alias Model =
 type alias RequestId = Int
 
 type Msg
-  = Handle (Result Decode.Error Lambda.EventState)
+  = Handle (Result Decode.Error Lambda.Event)
   | NewEvent State
   | Decrypted Env
   | GotToken (Result HttpError Secret)
@@ -67,8 +67,8 @@ initialModel env =
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    Handle (Ok (Lambda.EventState state event)) ->
-      updateEvent event state model
+    Handle (Ok event) ->
+      updateEvent event model
     Handle (Err err) ->
       let _ = Debug.log "error" err in
       (model, Cmd.none)
@@ -132,16 +132,16 @@ update msg model =
         [] ->
           (model, errorResponse "user not found" state.session)
 
-updateEvent : Lambda.Event -> Value -> Model -> (Model, Cmd Msg)
-updateEvent event stateValue model =
+updateEvent : Lambda.Event -> Model -> (Model, Cmd Msg)
+updateEvent event model =
   case event of
-    Lambda.NewEvent data ->
+    Lambda.NewEvent data session ->
       case Decode.decodeValue Event.event data of
         Ok ev ->
-          update (NewEvent (stateForEvent ev stateValue)) model
+          update (NewEvent (stateForEvent ev session)) model
         Err err ->
           let _ = Debug.log "event error" err in
-          (model, errorResponse "unrecognized event" stateValue)
+          (model, errorResponse "unrecognized event" session)
     Lambda.Decrypted (Ok [id, secret]) ->
       let
         env = Env.Plain
@@ -195,7 +195,7 @@ httpMatch id model =
     Nothing ->
       Debug.todo "response to unknown request"
 
-stateForEvent : Event.Event -> Value -> State
+stateForEvent : Event.Event -> Lambda.Session -> State
 stateForEvent event session =
   case event of
     Event.Videos {userId} ->
@@ -264,7 +264,7 @@ rememberHttpRequest req model =
   , toLambdaRequest id req
   )
 
-errorResponse : String -> Value -> Cmd Msg
+errorResponse : String -> Lambda.Session -> Cmd Msg
 errorResponse reason session =
   Lambda.response session (Err reason)
 
@@ -272,7 +272,7 @@ errorResponseState : String -> State -> Model -> (Model, Cmd Msg)
 errorResponseState reason state model =
   (model, errorResponse reason state.session)
 
-sendResponse : Value -> Value -> Cmd Msg
+sendResponse : Lambda.Session -> Value -> Cmd Msg
 sendResponse session response =
   Lambda.response session (Ok response)
 
@@ -296,7 +296,6 @@ toLambdaRequest id req =
     , headers = req.headers
     , id = id
     }
-    (Encode.int id)
 
 standardHeaders =
   [ Lambda.header "User-Agent" "Schedule From Videos Lambda"

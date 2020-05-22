@@ -1,7 +1,6 @@
 port module Lambda exposing
-  ( State
+  ( Session
   , Event(..)
-  , EventState(..)
   , HttpError(..)
   , event
   , decrypt
@@ -17,33 +16,25 @@ import Secret exposing (Secret)
 import Json.Decode as Decode exposing (Value)
 import Json.Encode as Encode
 
-type alias State = Value
+type alias Session = Value
 
 type HttpError
   = BadStatus Int String
   | NetworkError
 
-type EventState = EventState State Event
-
 type Event
-  = NewEvent Value
+  = NewEvent Value Session
   | Decrypted (Result String (List Secret))
   | HttpResponse Int (Result HttpError String)
 
-event : (Result Decode.Error EventState -> msg) -> Sub msg
+event : (Result Decode.Error Event -> msg) -> Sub msg
 event tagger =
   lambdaEvent (decodeEvent >> tagger)
 
-decodeEvent : Value -> Result Decode.Error EventState
+decodeEvent : Value -> Result Decode.Error Event
 decodeEvent thing =
-  Decode.decodeValue eventStateDecoder thing
+  Decode.decodeValue eventDecoder thing
     |> Result.mapError (Debug.log "lambda decode error")
-
-eventStateDecoder : Decode.Decoder EventState
-eventStateDecoder =
-  Decode.map2 EventState
-    stateDecoder
-    eventDecoder
 
 eventDecoder : Decode.Decoder Event
 eventDecoder =
@@ -51,8 +42,9 @@ eventDecoder =
     |> Decode.andThen(\kind ->
       case kind of
         "lambdaEvent" ->
-          Decode.map NewEvent
+          Decode.map2 NewEvent
             (Decode.field "event" Decode.value)
+            (Decode.field "session" Decode.value)
         "decrypted" ->
           Decode.map Decrypted
             (Decode.map Ok
@@ -89,10 +81,6 @@ eventDecoder =
         _ -> Decode.fail kind
     )
 
-stateDecoder : Decode.Decoder State
-stateDecoder =
-  Decode.field "state" Decode.value
-
 decrypt : List Secret -> Cmd msg
 decrypt values =
   Encode.object
@@ -123,11 +111,10 @@ type alias HttpRequest =
   , id : Int
   }
 
-httpRequest : HttpRequest -> Value -> Cmd msg
-httpRequest req state =
+httpRequest : HttpRequest -> Cmd msg
+httpRequest req =
   Encode.object
     [ ("kind", Encode.string "httpRequest")
-    , ("state", state)
     , ("request", Encode.object
       [ ("hostname", Encode.string req.hostname)
       , ("path", Encode.string req.path)
@@ -138,13 +125,13 @@ httpRequest req state =
     ]
     |> lambdaCommand
 
-response : Value -> Result String Value -> Cmd msg
+response : Session -> Result String Value -> Cmd msg
 response session result =
   case result of
     Ok value -> successResponse session value
     Err err -> errorResponse session err
 
-errorResponse : Value -> String -> Cmd msg
+errorResponse : Session -> String -> Cmd msg
 errorResponse session error =
   Encode.object
     [ ("kind", Encode.string "error")
@@ -153,7 +140,7 @@ errorResponse session error =
     ]
     |> lambdaCommand
 
-successResponse : Value -> Value -> Cmd msg
+successResponse : Session -> Value -> Cmd msg
 successResponse session data =
   Encode.object
     [ ("kind", Encode.string "success")

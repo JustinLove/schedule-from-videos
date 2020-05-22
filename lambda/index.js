@@ -33,7 +33,7 @@ const https = require('https')
 exports.handler = function(event, context, callback) {
   app.ports.lambdaEvent.send({
     kind: 'lambdaEvent',
-    state: callback,
+    session: callback,
     event: event,
   })
 }
@@ -42,13 +42,12 @@ const elm = require('./handler')
 
 const app = elm.Elm.Handler.init({flags: process.env});
 
-var decryptValues = function(encrypted, decrypted, state) {
+var decryptValues = function(encrypted, decrypted) {
   var encValue = encrypted.shift()
   decrypt(encValue, function(err, decValue) {
     if (err) {
       app.ports.lambdaEvent.send({
         kind: 'decryptionError',
-        state: state,
         error: err.toString(),
       })
       return
@@ -57,16 +56,15 @@ var decryptValues = function(encrypted, decrypted, state) {
     if (encrypted.length < 1) {
       app.ports.lambdaEvent.send({
         kind: 'decrypted',
-        state: state,
         values: decrypted,
       })
     } else {
-      decryptValues(encrypted, decrypted, state)
+      decryptValues(encrypted, decrypted)
     }
   })
 }
 
-var httpRequest = function(info, state) {
+var httpRequest = function(info) {
   const req = https.request({
     hostname: info.hostname,
     path: info.path,
@@ -82,7 +80,6 @@ var httpRequest = function(info, state) {
       if (res.statusCode == 200) {
         app.ports.lambdaEvent.send({
           kind: 'httpResponse',
-          state: state,
           id: info.id,
           body: rawData,
         })
@@ -90,7 +87,6 @@ var httpRequest = function(info, state) {
         console.log(rawData)
         app.ports.lambdaEvent.send({
           kind: 'badStatus',
-          state: state,
           id: info.id,
           status: res.statusCode,
           body: rawData,
@@ -103,7 +99,6 @@ var httpRequest = function(info, state) {
     console.error('request failed', err);
     app.ports.lambdaEvent.send({
       kind: 'networkError',
-      state: state,
       id: info.id,
       error: err,
     })
@@ -117,10 +112,10 @@ var command = function(message) {
   //console.log(message)
   switch (message.kind) {
     case 'decrypt':
-      decryptValues(message.values, [], message.state)
+      decryptValues(message.values, [])
       break;
     case 'httpRequest':
-      httpRequest(message.request, message.state)
+      httpRequest(message.request)
       break;
     case 'success':
       message.session(null, message.data)
