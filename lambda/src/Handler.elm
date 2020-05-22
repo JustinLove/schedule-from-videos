@@ -31,7 +31,7 @@ type Msg
   = Handle (Result Decode.Error Lambda.EventState)
   | NewEvent State
   | Decrypted Env
-  | GotToken (Result HttpError (Maybe Secret))
+  | GotToken (Result HttpError Secret)
   | HttpError State String HttpError
   | GotVideos State (List Helix.Video)
   | GotUsersById State (List Helix.User)
@@ -78,7 +78,7 @@ update msg model =
       { model | env = env }
         |> step
     GotToken (Ok auth) ->
-      { model | auth = auth }
+      { model | auth = Just auth }
         |> step
     GotToken (Err err) ->
       let _ = Debug.log "unable to fetch token" err in
@@ -156,16 +156,6 @@ updateEvent event stateValue model =
     Lambda.Decrypted (Err err) ->
       let _ = Debug.log ("decrypt error ") err in
       withAllRequests (errorResponseState "service misconfiguration") model
-    Lambda.HttpResponse "fetchToken" (Ok body) ->
-      let
-        mauth = body
-          |> Decode.decodeString decodeToken
-          |> Result.mapError (Debug.log "token decode error")
-          |> Result.toMaybe
-      in
-        update (GotToken (Ok mauth)) model
-    Lambda.HttpResponse "fetchToken" (Err err) ->
-      update (GotToken (Err (myError err))) model
     Lambda.HttpResponse tag result ->
       let (expect, m2) = httpMatch stateValue model in
       update (decodeResponse expect (Result.mapError myError result)) m2
@@ -225,7 +215,7 @@ step model =
     Env.Plain env ->
       case model.auth of
         Nothing ->
-          (model, fetchToken env)
+          rememberHttpRequest (fetchToken env) model
         Just auth ->
           withAllRequests (executeRequest (ApiAuth env.clientId auth)) model
     Env.Encrypted {clientId, clientSecret} ->
@@ -252,16 +242,7 @@ commandFold f a (model, cmd) =
 
 executeRequest : ApiAuth -> State -> Model -> (Model, Cmd Msg)
 executeRequest auth state model =
-  let
-    id = model.nextRequestId + 1
-    req = stateRequest auth state
-  in
-  ( { model
-    | nextRequestId = id
-    , outstandingRequests = Dict.insert id req.expect model.outstandingRequests
-    }
-  , toLambdaRequest id req
-  )
+  rememberHttpRequest (stateRequest auth state) model
 
 stateRequest : ApiAuth -> State -> HttpRequest
 stateRequest auth state =
@@ -274,6 +255,18 @@ stateRequest auth state =
       fetchVideos auth userId state
     FetchUser {userName} ->
       fetchUserByName auth userName state
+
+rememberHttpRequest : HttpRequest -> Model -> (Model, Cmd Msg)
+rememberHttpRequest req model =
+  let
+    id = model.nextRequestId + 1
+  in
+  ( { model
+    | nextRequestId = id
+    , outstandingRequests = Dict.insert id req.expect model.outstandingRequests
+    }
+  , toLambdaRequest id req
+  )
 
 errorResponse : String -> Value -> Cmd Msg
 errorResponse reason session =
@@ -340,16 +333,16 @@ tokenPath {clientId, clientSecret} =
     ++ "&client_secret=" ++ (Secret.toString clientSecret)
     ++ "&grant_type=client_credentials"
 
-fetchToken : Env.PlainEnv -> Cmd Msg
+fetchToken : Env.PlainEnv -> HttpRequest
 fetchToken env =
-  Lambda.httpRequest
+  httpRequest
     { hostname = tokenHostname
     , path = tokenPath env
     , method = "POST"
     , headers = standardHeaders
     , tag = "fetchToken"
+    , expect = expectJson GotToken decodeToken
     }
-    Encode.null
 
 decodeToken : Decode.Decoder Secret
 decodeToken =
