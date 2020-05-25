@@ -337,14 +337,17 @@ type Effect
   | Http Lambda.HttpRequest
   | Response Lambda.Session (Result String Value)
 
-perform : Effect -> Cmd msg
-perform effect =
+perform : (Model, Effect) -> (Model, Cmd msg)
+perform (model, effect) =
   case effect of
-    NoEffect -> Cmd.none
-    Batch effects -> List.map perform effects |> Cmd.batch
-    Decrypt secrets -> Lambda.decrypt secrets
-    Http request -> Lambda.httpRequest request
-    Response session result -> Lambda.response session result
+    NoEffect -> (model, Cmd.none)
+    Batch effects -> List.foldl (\eff (m, cmd) ->
+        let (m2, c2) = perform (m, eff) in
+        (m2, Cmd.batch [cmd, c2])
+      ) (model, Cmd.none) effects
+    Decrypt secrets -> (model, Lambda.decrypt secrets)
+    Http request -> (model, Lambda.httpRequest request)
+    Response session result -> (model, Lambda.response session result)
 
 type alias LambdaMsg = Lambda.Event
 handle = identity
@@ -352,7 +355,7 @@ handle = identity
 lambdaUpdate : LambdaMsg -> Model -> (Model, Cmd LambdaMsg)
 lambdaUpdate event model =
   updateEvent event model
-    |> Tuple.mapSecond perform
+    |> perform
 
 updateEvent : Lambda.Event -> Model -> (Model, Effect)
 updateEvent event model =
