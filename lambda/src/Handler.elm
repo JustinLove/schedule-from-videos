@@ -32,13 +32,35 @@ type LambdaMsg
   | AppMsg Msg
 
 type Msg
-  = NewEvent Value Value
+  = NewEvent Value Lambda.Session
   | Decrypted (Result String Env)
   | GotToken (Result HttpError Secret)
   | HttpError State String HttpError
   | GotVideos State (List Helix.Video)
   | GotUsersById State (List Helix.User)
   | GotUsersByName State (List Helix.User)
+
+{-type Effect
+  = NoEffect
+  | Batch (List Effect)
+  | Decrypt (List Secret)
+  | Http Lambda.HttpRequest
+  | Response Lambda.Session (Result String Value)
+
+perform : Effect -> Cmd msg
+perform effect =
+  case effect of
+    NoEffect -> Cmd.none
+    Batch effects -> List.map perform effects |> Cmd.batch
+    Decrypt secrets -> Lambda.decrypt secrets
+    Http request -> Lambda.httpRequest request
+    Response session result -> Lambda.response session result
+-}
+
+type alias Effect = Cmd Msg
+
+perform : Effect -> Cmd LambdaMsg
+perform effect = Cmd.map AppMsg effect
 
 type HttpError
   = BadStatus Int String
@@ -72,12 +94,12 @@ lambdaUpdate msg model =
   case msg of
     Handle event ->
       updateEvent event model
-        |> commandMap AppMsg
+        |> Tuple.mapSecond perform
     AppMsg m ->
       update m model
-        |> commandMap AppMsg
+        |> Tuple.mapSecond perform
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> (Model, Effect)
 update msg model =
   case msg of
     NewEvent data session ->
@@ -148,7 +170,7 @@ update msg model =
         [] ->
           (model, errorResponse "user not found" state.session)
 
-updateEvent : Lambda.Event -> Model -> (Model, Cmd Msg)
+updateEvent : Lambda.Event -> Model -> (Model, Effect)
 updateEvent event model =
   case event of
     Lambda.SystemError err ->
@@ -218,7 +240,7 @@ stateForEvent event session =
     Event.User {userName} ->
       State.fetchUser userName session
 
-step : Model -> (Model, Cmd Msg)
+step : Model -> (Model, Effect)
 step model =
   case model.env of
     Env.Plain env ->
@@ -230,29 +252,26 @@ step model =
     Env.Encrypted {clientId, clientSecret} ->
       (model, Lambda.decrypt [clientId, clientSecret])
 
-appendState : State -> Model -> (Model, Cmd Msg)
+appendState : State -> Model -> (Model, Effect)
 appendState state model =
   { model | pendingRequests = List.append model.pendingRequests [state] }
     |> step
 
-withAllRequests : (State -> Model -> (Model, Cmd msg)) -> Model -> (Model, Cmd msg)
+withAllRequests : (State -> Model -> (Model, Effect)) -> Model -> (Model, Effect)
 withAllRequests f model =
   model.pendingRequests
     |> List.foldl (commandFold f) ({model | pendingRequests = []}, Cmd.none)
 
 commandFold
-  : (a -> model -> (model, Cmd msg))
+  : (a -> model -> (model, Effect))
   -> a
-  -> (model, Cmd msg)
-  -> (model, Cmd msg)
+  -> (model, Effect)
+  -> (model, Effect)
 commandFold f a (model, cmd) =
   let (m, c) = f a model in
   (m, Cmd.batch [cmd, c])
 
-commandMap : (a -> msg) -> (model, Cmd a) -> (model, Cmd msg)
-commandMap f (model, cmd) = (model, Cmd.map f cmd)
-
-executeRequest : ApiAuth -> State -> Model -> (Model, Cmd Msg)
+executeRequest : ApiAuth -> State -> Model -> (Model, Effect)
 executeRequest auth state model =
   rememberHttpRequest (stateRequest auth state) model
 
@@ -268,7 +287,7 @@ stateRequest auth state =
     FetchUser {userName} ->
       fetchUserByName auth userName state
 
-rememberHttpRequest : HttpRequest -> Model -> (Model, Cmd Msg)
+rememberHttpRequest : HttpRequest -> Model -> (Model, Effect)
 rememberHttpRequest req model =
   let
     id = model.nextRequestId + 1
@@ -280,15 +299,15 @@ rememberHttpRequest req model =
   , toLambdaRequest id req
   )
 
-errorResponse : String -> Lambda.Session -> Cmd msg
+errorResponse : String -> Lambda.Session -> Effect
 errorResponse reason session =
   Lambda.response session (Err reason)
 
-errorResponseState : String -> State -> model -> (model, Cmd msg)
+errorResponseState : String -> State -> model -> (model, Effect)
 errorResponseState reason state model =
   (model, errorResponse reason state.session)
 
-sendResponse : Lambda.Session -> Value -> Cmd msg
+sendResponse : Lambda.Session -> Value -> Effect
 sendResponse session response =
   Lambda.response session (Ok response)
 
@@ -303,7 +322,7 @@ type alias HttpRequest =
 httpRequest : HttpRequest -> HttpRequest
 httpRequest = identity
 
-toLambdaRequest : RequestId -> HttpRequest -> Cmd msg
+toLambdaRequest : RequestId -> HttpRequest -> Effect
 toLambdaRequest id req =
   Lambda.httpRequest
     { hostname = req.hostname
