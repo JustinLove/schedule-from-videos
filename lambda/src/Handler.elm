@@ -27,9 +27,6 @@ type alias Model =
 
 type alias RequestId = Int
 
-type alias LambdaMsg = Lambda.Event
-handle = identity
-
 type Msg
   = NewEvent Value Lambda.Session
   | Decrypted (Result String (List Secret))
@@ -39,27 +36,10 @@ type Msg
   | GotUsersById State (List Helix.User)
   | GotUsersByName State (List Helix.User)
 
-type Effect
-  = NoEffect
-  | Batch (List Effect)
-  | Decrypt (List Secret)
-  | Http Lambda.HttpRequest
-  | Response Lambda.Session (Result String Value)
-
-perform : Effect -> Cmd msg
-perform effect =
-  case effect of
-    NoEffect -> Cmd.none
-    Batch effects -> List.map perform effects |> Cmd.batch
-    Decrypt secrets -> Lambda.decrypt secrets
-    Http request -> Lambda.httpRequest request
-    Response session result -> Lambda.response session result
-
 type HttpError
   = BadStatus Int String
   | NetworkError
   | BadBody Decode.Error
-  | UnknownResponse
 
 main = Platform.worker
   { init = init
@@ -81,11 +61,6 @@ initialModel env =
   , outstandingRequests = Dict.empty
   , pendingRequests = []
   }
-
-lambdaUpdate : LambdaMsg -> Model -> (Model, Cmd LambdaMsg)
-lambdaUpdate event model =
-  updateEvent event model
-    |> Tuple.mapSecond perform
 
 update : Msg -> Model -> (Model, Effect)
 update msg model =
@@ -166,19 +141,6 @@ update msg model =
         [] ->
           (model, errorResponse "user not found" state.session)
 
-updateEvent : Lambda.Event -> Model -> (Model, Effect)
-updateEvent event model =
-  case event of
-    Lambda.SystemError err ->
-      (model, NoEffect)
-    Lambda.NewEvent data session ->
-      update (NewEvent data session) model
-    Lambda.Decrypted result ->
-      update (Decrypted result) model
-    Lambda.HttpResponse id result ->
-      let (expect, m2) = httpMatch id model in
-      update (decodeResponse expect (Result.mapError myError result)) m2
-
 myError : Lambda.HttpError -> HttpError
 myError error =
   case error of
@@ -190,29 +152,6 @@ httpResponse state source success result =
   case result of
     Ok value -> success state value
     Err err -> HttpError state source err
-
-decodeResponse : Expect msg -> Result HttpError String -> msg
-decodeResponse expect response =
-  case expect of
-    ExpectString decodeTagger ->
-      decodeTagger response
-
-type Expect msg
-  = ExpectString (Result HttpError String -> msg)
-
-expectJson : (Result HttpError a -> msg) -> Decode.Decoder a -> Expect msg
-expectJson tagger decoder =
-  ExpectString (Result.andThen (Decode.decodeString decoder >> Result.mapError BadBody)
-    >> tagger
-  )
-
-httpMatch : Int -> Model -> (Expect Msg, Model)
-httpMatch id model =
-  case Dict.get id model.outstandingRequests of
-    Just expect ->
-      (expect, { model | outstandingRequests = Dict.remove id model.outstandingRequests })
-    Nothing ->
-      Debug.todo "response to unknown request"
 
 stateForEvent : Event.Event -> Lambda.Session -> State
 stateForEvent event session =
@@ -271,18 +210,6 @@ stateRequest auth state =
     FetchUser {userName} ->
       fetchUserByName auth userName state
 
-rememberHttpRequest : HttpRequest -> Model -> (Model, Effect)
-rememberHttpRequest req model =
-  let
-    id = model.nextRequestId + 1
-  in
-  ( { model
-    | nextRequestId = id
-    , outstandingRequests = Dict.insert id req.expect model.outstandingRequests
-    }
-  , toLambdaRequest id req
-  )
-
 errorResponse : String -> Lambda.Session -> Effect
 errorResponse reason session =
   Response session (Err reason)
@@ -305,16 +232,6 @@ type alias HttpRequest =
 
 httpRequest : HttpRequest -> HttpRequest
 httpRequest = identity
-
-toLambdaRequest : RequestId -> HttpRequest -> Effect
-toLambdaRequest id req =
-  Http
-    { hostname = req.hostname
-    , path = req.path
-    , method = req.method
-    , headers = req.headers
-    , id = id
-    }
 
 standardHeaders =
   [ Lambda.header "User-Agent" "Schedule From Videos Lambda"
@@ -408,6 +325,91 @@ fetchUserByName auth login state =
     , method = "GET"
     , headers = oauthHeaders auth
     , expect = expectJson (httpResponse state "fetchUserByName" GotUsersByName) Helix.users
+    }
+
+
+-------------------------------------
+
+type Effect
+  = NoEffect
+  | Batch (List Effect)
+  | Decrypt (List Secret)
+  | Http Lambda.HttpRequest
+  | Response Lambda.Session (Result String Value)
+
+perform : Effect -> Cmd msg
+perform effect =
+  case effect of
+    NoEffect -> Cmd.none
+    Batch effects -> List.map perform effects |> Cmd.batch
+    Decrypt secrets -> Lambda.decrypt secrets
+    Http request -> Lambda.httpRequest request
+    Response session result -> Lambda.response session result
+
+type alias LambdaMsg = Lambda.Event
+handle = identity
+
+lambdaUpdate : LambdaMsg -> Model -> (Model, Cmd LambdaMsg)
+lambdaUpdate event model =
+  updateEvent event model
+    |> Tuple.mapSecond perform
+
+updateEvent : Lambda.Event -> Model -> (Model, Effect)
+updateEvent event model =
+  case event of
+    Lambda.SystemError err ->
+      (model, NoEffect)
+    Lambda.NewEvent data session ->
+      update (NewEvent data session) model
+    Lambda.Decrypted result ->
+      update (Decrypted result) model
+    Lambda.HttpResponse id result ->
+      let (expect, m2) = httpMatch id model in
+      update (decodeResponse expect (Result.mapError myError result)) m2
+
+decodeResponse : Expect msg -> Result HttpError String -> msg
+decodeResponse expect response =
+  case expect of
+    ExpectString decodeTagger ->
+      decodeTagger response
+
+type Expect msg
+  = ExpectString (Result HttpError String -> msg)
+
+expectJson : (Result HttpError a -> msg) -> Decode.Decoder a -> Expect msg
+expectJson tagger decoder =
+  ExpectString (Result.andThen (Decode.decodeString decoder >> Result.mapError BadBody)
+    >> tagger
+  )
+
+httpMatch : Int -> Model -> (Expect Msg, Model)
+httpMatch id model =
+  case Dict.get id model.outstandingRequests of
+    Just expect ->
+      (expect, { model | outstandingRequests = Dict.remove id model.outstandingRequests })
+    Nothing ->
+      Debug.todo "response to unknown request"
+
+rememberHttpRequest : HttpRequest -> Model -> (Model, Effect)
+rememberHttpRequest req model =
+  let
+    id = model.nextRequestId + 1
+  in
+  ( { model
+    | nextRequestId = id
+    , outstandingRequests = Dict.insert id req.expect model.outstandingRequests
+    }
+  , toLambdaRequest id req
+  )
+
+toLambdaRequest : RequestId -> HttpRequest -> Effect
+toLambdaRequest id req =
+  Http
+    { hostname = req.hostname
+    , path = req.path
+    , method = req.method
+    , headers = req.headers
+    , id = id
     }
 
 subscriptions : Model -> Sub LambdaMsg
