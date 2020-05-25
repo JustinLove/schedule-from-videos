@@ -29,7 +29,7 @@ type alias RequestId = Int
 
 type Msg
   = Handle (Result Decode.Error Lambda.Event)
-  | NewEvent State
+  | NewEvent Value Value
   | Decrypted (Result String Env)
   | GotToken (Result HttpError Secret)
   | HttpError State String HttpError
@@ -72,8 +72,13 @@ update msg model =
     Handle (Err err) ->
       let _ = Debug.log "error" err in
       (model, Cmd.none)
-    NewEvent state ->
-      appendState state model
+    NewEvent data session ->
+      case Decode.decodeValue Event.event data of
+        Ok ev ->
+          appendState (stateForEvent ev session) model
+        Err err ->
+          let _ = Debug.log "event error" err in
+          (model, errorResponse "unrecognized event" session)
     Decrypted (Ok env) ->
       { model | env = env }
         |> step
@@ -139,12 +144,7 @@ updateEvent : Lambda.Event -> Model -> (Model, Cmd Msg)
 updateEvent event model =
   case event of
     Lambda.NewEvent data session ->
-      case Decode.decodeValue Event.event data of
-        Ok ev ->
-          update (NewEvent (stateForEvent ev session)) model
-        Err err ->
-          let _ = Debug.log "event error" err in
-          (model, errorResponse "unrecognized event" session)
+      update (NewEvent data session) model
     Lambda.Decrypted result ->
       result
         |> Result.andThen (\list ->
