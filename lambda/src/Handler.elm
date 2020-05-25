@@ -27,9 +27,8 @@ type alias Model =
 
 type alias RequestId = Int
 
-type LambdaMsg
-  = Handle Lambda.Event
-  | AppMsg Msg
+type alias LambdaMsg = Lambda.Event
+handle = identity
 
 type Msg
   = NewEvent Value Lambda.Session
@@ -40,7 +39,7 @@ type Msg
   | GotUsersById State (List Helix.User)
   | GotUsersByName State (List Helix.User)
 
-{-type Effect
+type Effect
   = NoEffect
   | Batch (List Effect)
   | Decrypt (List Secret)
@@ -55,12 +54,6 @@ perform effect =
     Decrypt secrets -> Lambda.decrypt secrets
     Http request -> Lambda.httpRequest request
     Response session result -> Lambda.response session result
--}
-
-type alias Effect = Cmd Msg
-
-perform : Effect -> Cmd LambdaMsg
-perform effect = Cmd.map AppMsg effect
 
 type HttpError
   = BadStatus Int String
@@ -90,14 +83,9 @@ initialModel env =
   }
 
 lambdaUpdate : LambdaMsg -> Model -> (Model, Cmd LambdaMsg)
-lambdaUpdate msg model =
-  case msg of
-    Handle event ->
-      updateEvent event model
-        |> Tuple.mapSecond perform
-    AppMsg m ->
-      update m model
-        |> Tuple.mapSecond perform
+lambdaUpdate event model =
+  updateEvent event model
+    |> Tuple.mapSecond perform
 
 update : Msg -> Model -> (Model, Effect)
 update msg model =
@@ -174,7 +162,7 @@ updateEvent : Lambda.Event -> Model -> (Model, Effect)
 updateEvent event model =
   case event of
     Lambda.SystemError err ->
-      (model, Cmd.none)
+      (model, NoEffect)
     Lambda.NewEvent data session ->
       update (NewEvent data session) model
     Lambda.Decrypted result ->
@@ -250,7 +238,7 @@ step model =
         Just auth ->
           withAllRequests (executeRequest (ApiAuth env.clientId auth)) model
     Env.Encrypted {clientId, clientSecret} ->
-      (model, Lambda.decrypt [clientId, clientSecret])
+      (model, Decrypt [clientId, clientSecret])
 
 appendState : State -> Model -> (Model, Effect)
 appendState state model =
@@ -260,7 +248,7 @@ appendState state model =
 withAllRequests : (State -> Model -> (Model, Effect)) -> Model -> (Model, Effect)
 withAllRequests f model =
   model.pendingRequests
-    |> List.foldl (commandFold f) ({model | pendingRequests = []}, Cmd.none)
+    |> List.foldl (commandFold f) ({model | pendingRequests = []}, NoEffect)
 
 commandFold
   : (a -> model -> (model, Effect))
@@ -269,7 +257,7 @@ commandFold
   -> (model, Effect)
 commandFold f a (model, cmd) =
   let (m, c) = f a model in
-  (m, Cmd.batch [cmd, c])
+  (m, Batch [cmd, c])
 
 executeRequest : ApiAuth -> State -> Model -> (Model, Effect)
 executeRequest auth state model =
@@ -301,7 +289,7 @@ rememberHttpRequest req model =
 
 errorResponse : String -> Lambda.Session -> Effect
 errorResponse reason session =
-  Lambda.response session (Err reason)
+  Response session (Err reason)
 
 errorResponseState : String -> State -> model -> (model, Effect)
 errorResponseState reason state model =
@@ -309,7 +297,7 @@ errorResponseState reason state model =
 
 sendResponse : Lambda.Session -> Value -> Effect
 sendResponse session response =
-  Lambda.response session (Ok response)
+  Response session (Ok response)
 
 type alias HttpRequest =
   { hostname : String
@@ -324,7 +312,7 @@ httpRequest = identity
 
 toLambdaRequest : RequestId -> HttpRequest -> Effect
 toLambdaRequest id req =
-  Lambda.httpRequest
+  Http
     { hostname = req.hostname
     , path = req.path
     , method = req.method
@@ -427,4 +415,4 @@ fetchUserByName auth login state =
     }
 
 subscriptions : Model -> Sub LambdaMsg
-subscriptions model = Lambda.event Handle
+subscriptions model = Lambda.event handle
