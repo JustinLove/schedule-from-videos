@@ -30,7 +30,7 @@ type alias RequestId = Int
 type Msg
   = Handle (Result Decode.Error Lambda.Event)
   | NewEvent State
-  | Decrypted Env
+  | Decrypted (Result String Env)
   | GotToken (Result HttpError Secret)
   | HttpError State String HttpError
   | GotVideos State (List Helix.Video)
@@ -74,9 +74,12 @@ update msg model =
       (model, Cmd.none)
     NewEvent state ->
       appendState state model
-    Decrypted env ->
+    Decrypted (Ok env) ->
       { model | env = env }
         |> step
+    Decrypted (Err err) ->
+      let _ = Debug.log ("decrypt error ") err in
+      withAllRequests (errorResponseState "service misconfiguration") model
     GotToken (Ok auth) ->
       { model | auth = Just auth }
         |> step
@@ -142,20 +145,20 @@ updateEvent event model =
         Err err ->
           let _ = Debug.log "event error" err in
           (model, errorResponse "unrecognized event" session)
-    Lambda.Decrypted (Ok [id, secret]) ->
-      let
-        env = Env.Plain
-          { clientId = id
-          , clientSecret = secret
-          }
-      in
-        update (Decrypted env) model
-    Lambda.Decrypted (Ok _) ->
-      let _ = Debug.log ("decrypt wrong number of results ") in
-      withAllRequests (errorResponseState "service misconfiguration") model
-    Lambda.Decrypted (Err err) ->
-      let _ = Debug.log ("decrypt error ") err in
-      withAllRequests (errorResponseState "service misconfiguration") model
+    Lambda.Decrypted result ->
+      result
+        |> Result.andThen (\list ->
+          case list of
+            [id, secret] ->
+              Ok <| Env.Plain
+                { clientId = id
+                , clientSecret = secret
+                }
+            _ ->
+              Err "decrypt wrong number of results "
+          )
+        |> Decrypted
+        |> (\msg -> update msg model)
     Lambda.HttpResponse id result ->
       let (expect, m2) = httpMatch id model in
       update (decodeResponse expect (Result.mapError myError result)) m2

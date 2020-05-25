@@ -1,6 +1,8 @@
 - working plan: aws lambda, node
   - refactoring
     - encapsulate http responses
+    - effect types?
+    - next action?
   - check jwt - twitch onAuthorized token
     - https://paste.fuelrats.com/acapajejob.js
   - versioning
