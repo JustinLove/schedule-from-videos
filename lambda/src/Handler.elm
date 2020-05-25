@@ -224,16 +224,16 @@ appendState state model =
   { model | pendingRequests = List.append model.pendingRequests [state] }
     |> step
 
-withAllRequests : (State -> Model -> (Model, Cmd Msg)) -> Model -> (Model, Cmd Msg)
+withAllRequests : (State -> Model -> (Model, Cmd msg)) -> Model -> (Model, Cmd msg)
 withAllRequests f model =
   model.pendingRequests
     |> List.foldl (commandFold f) ({model | pendingRequests = []}, Cmd.none)
 
 commandFold
-  : (a -> Model -> (Model, Cmd Msg))
+  : (a -> Model -> (Model, Cmd msg))
   -> a
-  -> (Model, Cmd Msg)
-  -> (Model, Cmd Msg)
+  -> (Model, Cmd msg)
+  -> (Model, Cmd msg)
 commandFold f a (model, cmd) =
   let (m, c) = f a model in
   (m, Cmd.batch [cmd, c])
@@ -266,15 +266,15 @@ rememberHttpRequest req model =
   , toLambdaRequest id req
   )
 
-errorResponse : String -> Lambda.Session -> Cmd Msg
+errorResponse : String -> Lambda.Session -> Cmd msg
 errorResponse reason session =
   Lambda.response session (Err reason)
 
-errorResponseState : String -> State -> Model -> (Model, Cmd Msg)
+errorResponseState : String -> State -> Model -> (Model, Cmd msg)
 errorResponseState reason state model =
   (model, errorResponse reason state.session)
 
-sendResponse : Lambda.Session -> Value -> Cmd Msg
+sendResponse : Lambda.Session -> Value -> Cmd msg
 sendResponse session response =
   Lambda.response session (Ok response)
 
@@ -289,7 +289,7 @@ type alias HttpRequest =
 httpRequest : HttpRequest -> HttpRequest
 httpRequest = identity
 
-toLambdaRequest : RequestId -> HttpRequest -> Cmd Msg
+toLambdaRequest : RequestId -> HttpRequest -> Cmd msg
 toLambdaRequest id req =
   Lambda.httpRequest
     { hostname = req.hostname
