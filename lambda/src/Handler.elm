@@ -27,9 +27,12 @@ type alias Model =
 
 type alias RequestId = Int
 
-type Msg
+type LambdaMsg
   = Handle Lambda.Event
-  | NewEvent Value Value
+  | AppMsg Msg
+
+type Msg
+  = NewEvent Value Value
   | Decrypted (Result String Env)
   | GotToken (Result HttpError Secret)
   | HttpError State String HttpError
@@ -45,7 +48,7 @@ type HttpError
 
 main = Platform.worker
   { init = init
-  , update = update
+  , update = lambdaUpdate
   , subscriptions = subscriptions
   }
 
@@ -64,11 +67,19 @@ initialModel env =
   , pendingRequests = []
   }
 
-update : Msg -> Model -> (Model, Cmd Msg)
-update msg model =
+lambdaUpdate : LambdaMsg -> Model -> (Model, Cmd LambdaMsg)
+lambdaUpdate msg model =
   case msg of
     Handle event ->
       updateEvent event model
+        |> commandMap AppMsg
+    AppMsg m ->
+      update m model
+        |> commandMap AppMsg
+
+update : Msg -> Model -> (Model, Cmd Msg)
+update msg model =
+  case msg of
     NewEvent data session ->
       case Decode.decodeValue Event.event data of
         Ok ev ->
@@ -230,13 +241,16 @@ withAllRequests f model =
     |> List.foldl (commandFold f) ({model | pendingRequests = []}, Cmd.none)
 
 commandFold
-  : (a -> Model -> (Model, Cmd msg))
+  : (a -> model -> (model, Cmd msg))
   -> a
-  -> (Model, Cmd msg)
-  -> (Model, Cmd msg)
+  -> (model, Cmd msg)
+  -> (model, Cmd msg)
 commandFold f a (model, cmd) =
   let (m, c) = f a model in
   (m, Cmd.batch [cmd, c])
+
+commandMap : (a -> msg) -> (model, Cmd a) -> (model, Cmd msg)
+commandMap f (model, cmd) = (model, Cmd.map f cmd)
 
 executeRequest : ApiAuth -> State -> Model -> (Model, Cmd Msg)
 executeRequest auth state model =
@@ -270,7 +284,7 @@ errorResponse : String -> Lambda.Session -> Cmd msg
 errorResponse reason session =
   Lambda.response session (Err reason)
 
-errorResponseState : String -> State -> Model -> (Model, Cmd msg)
+errorResponseState : String -> State -> model -> (model, Cmd msg)
 errorResponseState reason state model =
   (model, errorResponse reason state.session)
 
@@ -393,5 +407,5 @@ fetchUserByName auth login state =
     , expect = expectJson (httpResponse state "fetchUserByName" GotUsersByName) Helix.users
     }
 
-subscriptions : Model -> Sub Msg
+subscriptions : Model -> Sub LambdaMsg
 subscriptions model = Lambda.event Handle
