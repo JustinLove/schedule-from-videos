@@ -23,18 +23,25 @@ type HttpError
   | NetworkError
 
 type Event
-  = NewEvent Value Session
+  = SystemError String
+  | NewEvent Value Session
   | Decrypted (Result String (List Secret))
   | HttpResponse Int (Result HttpError String)
 
-event : (Result Decode.Error Event -> msg) -> Sub msg
+event : (Event -> msg) -> Sub msg
 event tagger =
   lambdaEvent (decodeEvent >> tagger)
 
-decodeEvent : Value -> Result Decode.Error Event
+decodeEvent : Value -> Event
 decodeEvent thing =
-  Decode.decodeValue eventDecoder thing
-    |> Result.mapError (Debug.log "lambda decode error")
+  case Decode.decodeValue eventDecoder thing of
+    Ok ev ->
+      ev
+    Err err ->
+      err
+        |> Debug.log "lambda decode error"
+        |> Decode.errorToString
+        |> SystemError
 
 eventDecoder : Decode.Decoder Event
 eventDecoder =

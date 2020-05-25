@@ -28,7 +28,7 @@ type alias Model =
 type alias RequestId = Int
 
 type Msg
-  = Handle (Result Decode.Error Lambda.Event)
+  = Handle Lambda.Event
   | NewEvent Value Value
   | Decrypted (Result String Env)
   | GotToken (Result HttpError Secret)
@@ -67,11 +67,8 @@ initialModel env =
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    Handle (Ok event) ->
+    Handle event ->
       updateEvent event model
-    Handle (Err err) ->
-      let _ = Debug.log "error" err in
-      (model, Cmd.none)
     NewEvent data session ->
       case Decode.decodeValue Event.event data of
         Ok ev ->
@@ -143,6 +140,8 @@ update msg model =
 updateEvent : Lambda.Event -> Model -> (Model, Cmd Msg)
 updateEvent event model =
   case event of
+    Lambda.SystemError err ->
+      (model, Cmd.none)
     Lambda.NewEvent data session ->
       update (NewEvent data session) model
     Lambda.Decrypted result ->
