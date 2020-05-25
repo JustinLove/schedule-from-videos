@@ -169,7 +169,7 @@ step model =
     Env.Plain env ->
       case model.auth of
         Nothing ->
-          rememberHttpRequest (fetchToken env) model
+          (model, fetchToken env)
         Just auth ->
           withAllRequests (executeRequest (ApiAuth env.clientId auth)) model
     Env.Encrypted {clientId, clientSecret} ->
@@ -196,9 +196,9 @@ commandFold f a (model, cmd) =
 
 executeRequest : ApiAuth -> State -> Model -> (Model, Effect)
 executeRequest auth state model =
-  rememberHttpRequest (stateRequest auth state) model
+  (model, stateRequest auth state)
 
-stateRequest : ApiAuth -> State -> HttpRequest
+stateRequest : ApiAuth -> State -> Effect
 stateRequest auth state =
   case state.request of
     FetchVideos {userId} ->
@@ -230,8 +230,8 @@ type alias HttpRequest =
   , expect : Expect Msg
   }
 
-httpRequest : HttpRequest -> HttpRequest
-httpRequest = identity
+httpRequest : HttpRequest -> Effect
+httpRequest = Http
 
 standardHeaders =
   [ Lambda.header "User-Agent" "Schedule From Videos Lambda"
@@ -263,7 +263,7 @@ tokenPath {clientId, clientSecret} =
     ++ "&client_secret=" ++ (Secret.toString clientSecret)
     ++ "&grant_type=client_credentials"
 
-fetchToken : Env.PlainEnv -> HttpRequest
+fetchToken : Env.PlainEnv -> Effect
 fetchToken env =
   httpRequest
     { hostname = tokenHostname
@@ -284,7 +284,7 @@ videosPath : String -> String
 videosPath userId =
   "/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : ApiAuth -> String -> State -> HttpRequest
+fetchVideos : ApiAuth -> String -> State -> Effect
 fetchVideos auth userId state =
   httpRequest
     { hostname = helixHostname
@@ -303,7 +303,7 @@ fetchUserByIdPath : String -> String
 fetchUserByIdPath userId =
   "/helix/users?id=" ++ userId
 
-fetchUserById : ApiAuth -> String -> State -> HttpRequest
+fetchUserById : ApiAuth -> String -> State -> Effect
 fetchUserById auth userId state =
   httpRequest
     { hostname = helixHostname
@@ -317,7 +317,7 @@ fetchUserByNamePath : String -> String
 fetchUserByNamePath login =
   "/helix/users?login=" ++ login
 
-fetchUserByName : ApiAuth -> String -> State -> HttpRequest
+fetchUserByName : ApiAuth -> String -> State -> Effect
 fetchUserByName auth login state =
   httpRequest
     { hostname = helixHostname
@@ -334,19 +334,20 @@ type Effect
   = NoEffect
   | Batch (List Effect)
   | Decrypt (List Secret)
-  | Http Lambda.HttpRequest
+  | Http HttpRequest
   | Response Lambda.Session (Result String Value)
 
 perform : (Model, Effect) -> (Model, Cmd msg)
 perform (model, effect) =
   case effect of
     NoEffect -> (model, Cmd.none)
-    Batch effects -> List.foldl (\eff (m, cmd) ->
+    Batch effects ->
+      List.foldl (\eff (m, cmd) ->
         let (m2, c2) = perform (m, eff) in
         (m2, Cmd.batch [cmd, c2])
       ) (model, Cmd.none) effects
     Decrypt secrets -> (model, Lambda.decrypt secrets)
-    Http request -> (model, Lambda.httpRequest request)
+    Http request -> rememberHttpRequest request model
     Response session result -> (model, Lambda.response session result)
 
 type alias LambdaMsg = Lambda.Event
@@ -393,7 +394,7 @@ httpMatch id model =
     Nothing ->
       Debug.todo "response to unknown request"
 
-rememberHttpRequest : HttpRequest -> Model -> (Model, Effect)
+rememberHttpRequest : HttpRequest -> Model -> (Model, Cmd msg)
 rememberHttpRequest req model =
   let
     id = model.nextRequestId + 1
@@ -405,9 +406,9 @@ rememberHttpRequest req model =
   , toLambdaRequest id req
   )
 
-toLambdaRequest : RequestId -> HttpRequest -> Effect
+toLambdaRequest : RequestId -> HttpRequest -> Cmd msg
 toLambdaRequest id req =
-  Http
+  Lambda.httpRequest
     { hostname = req.hostname
     , path = req.path
     , method = req.method
