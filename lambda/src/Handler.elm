@@ -3,6 +3,8 @@ module Handler exposing (main)
 import Env exposing (Env)
 import Event.Decode as Event
 import Lambda
+import Lambda.Port as Port
+import Lambda.Http as Http
 import Reply.Encode as Encode
 import Secret exposing (Secret)
 import State exposing (Retry(..), Request(..), State)
@@ -26,16 +28,11 @@ type alias Model =
 type Msg
   = NewEvent Value Lambda.Session
   | Decrypted (Result String (List Secret))
-  | GotToken (Result HttpError Secret)
-  | HttpError State String HttpError
+  | GotToken (Result Http.Error Secret)
+  | HttpError State String Http.Error
   | GotVideos State (List Helix.Video)
   | GotUsersById State (List Helix.User)
   | GotUsersByName State (List Helix.User)
-
-type HttpError
-  = BadStatus Int String
-  | NetworkError
-  | BadBody Decode.Error
 
 main = lambdaProgram
   { init = appInit
@@ -87,7 +84,7 @@ appUpdate msg model =
     GotToken (Err err) ->
       let _ = Debug.log "unable to fetch token" err in
       withAllRequests (errorResponseState "unable to fetch token") model
-    HttpError state source (BadStatus 401 body) ->
+    HttpError state source (Http.BadStatus 401 body) ->
       let _ = Debug.log ("auth failed " ++ source) body in
       if state.shouldRetry == WillRetry then
         { model | auth = Nothing }
@@ -136,13 +133,7 @@ appUpdate msg model =
         [] ->
           (model, errorResponse "user not found" state.session)
 
-myError : Lambda.HttpError -> HttpError
-myError error =
-  case error of
-    Lambda.BadStatus status body -> BadStatus status body
-    Lambda.NetworkError -> NetworkError
-
-httpResponse : State -> String -> (State -> a -> Msg) -> Result HttpError a -> Msg
+httpResponse : State -> String -> (State -> a -> Msg) -> Result Http.Error a -> Msg
 httpResponse state source success result =
   case result of
     Ok value -> success state value
@@ -217,11 +208,11 @@ sendResponse : Lambda.Session -> Value -> Effect Msg
 sendResponse session response =
   Response session (Ok response)
 
-httpRequest : HttpRequest Msg -> Effect Msg
+httpRequest : Http.Request Msg -> Effect Msg
 httpRequest = Http
 
 standardHeaders =
-  [ Lambda.header "User-Agent" "Schedule From Videos Lambda"
+  [ Port.header "User-Agent" "Schedule From Videos Lambda"
   ]
 
 type alias ApiAuth =
@@ -229,15 +220,15 @@ type alias ApiAuth =
   , token : Secret
   }
 
-oauthHeaders : ApiAuth -> List Lambda.Header
+oauthHeaders : ApiAuth -> List Port.Header
 oauthHeaders {clientId, token} =
   twitchHeaders (Secret.toString clientId) (Secret.toString token)
     |> List.append standardHeaders
 
-twitchHeaders : String -> String -> List Lambda.Header
+twitchHeaders : String -> String -> List Port.Header
 twitchHeaders clientId token =
-  [ Lambda.header "Client-ID" clientId
-  , Lambda.header "Authorization" ("Bearer "++token)
+  [ Port.header "Client-ID" clientId
+  , Port.header "Authorization" ("Bearer "++token)
   ]
 
 --tokenHostname = "localhost"
@@ -257,7 +248,7 @@ fetchToken env =
     , path = tokenPath env
     , method = "POST"
     , headers = standardHeaders
-    , expect = expectJson GotToken decodeToken
+    , expect = Http.expectJson GotToken decodeToken
     }
 
 decodeToken : Decode.Decoder Secret
@@ -278,7 +269,7 @@ fetchVideos auth userId state =
     , path = videosPath userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = expectJson (httpResponse state "fetchVideos" GotVideos) decodeVideos
+    , expect = Http.expectJson (httpResponse state "fetchVideos" GotVideos) decodeVideos
     }
 
 decodeVideos : Decode.Decoder (List Helix.Video)
@@ -297,7 +288,7 @@ fetchUserById auth userId state =
     , path =  fetchUserByIdPath userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = expectJson (httpResponse state "fetchUserById" GotUsersById) Helix.users
+    , expect = Http.expectJson (httpResponse state "fetchUserById" GotUsersById) Helix.users
     }
 
 fetchUserByNamePath : String -> String
@@ -311,34 +302,26 @@ fetchUserByName auth login state =
     , path =  fetchUserByNamePath login
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = expectJson (httpResponse state "fetchUserByName" GotUsersByName) Helix.users
+    , expect = Http.expectJson (httpResponse state "fetchUserByName" GotUsersByName) Helix.users
     }
 
 
 -------------------------------------
 
-type alias HttpModel model msg =
-  { model
-  | nextRequestId : RequestId
-  , outstandingRequests : Dict Int (Expect msg)
-  }
-
 type alias LambdaModel model msg =
-  { nextRequestId : RequestId
-  , outstandingRequests : Dict Int (Expect msg)
+  { nextRequestId : Http.RequestId
+  , outstandingRequests : Dict Int (Http.Expect msg)
   , app : model
   }
-
-type alias RequestId = Int
 
 type Effect msg
   = NoEffect
   | Batch (List (Effect msg))
   | Decrypt (List Secret)
-  | Http (HttpRequest msg)
-  | Response Lambda.Session (Result String Value)
+  | Http (Http.Request msg)
+  | Response Port.Session (Result String Value)
 
-perform : (HttpModel model appMsg, Effect appMsg) -> (HttpModel model appMsg, Cmd msg)
+perform : (LambdaModel model appMsg, Effect appMsg) -> (LambdaModel model appMsg, Cmd msg)
 perform (model, effect) =
   case effect of
     NoEffect -> (model, Cmd.none)
@@ -347,17 +330,17 @@ perform (model, effect) =
         let (m2, c2) = perform (m, eff) in
         (m2, Cmd.batch [cmd, c2])
       ) (model, Cmd.none) effects
-    Decrypt secrets -> (model, Lambda.decrypt secrets)
-    Http request -> rememberHttpRequest request model
-    Response session result -> (model, Lambda.response session result)
+    Decrypt secrets -> (model, Port.decrypt secrets)
+    Http request -> Http.rememberHttpRequest request model
+    Response session result -> (model, Port.response session result)
 
-type alias LambdaMsg = Lambda.Event
+type alias LambdaMsg = Port.Event
 handle = identity
 
 lambdaProgram :
   { init : flags -> (model, Effect msg)
   , update : msg -> model -> (model, Effect msg)
-  , newEvent : Value -> Lambda.Session -> msg
+  , newEvent : Value -> Port.Session -> msg
   , decrypted : (Result String (List Secret)) -> msg
   }
   -> Program flags (LambdaModel model msg) LambdaMsg
@@ -381,7 +364,7 @@ initialLambdaModel app =
   }
 
 updateEvent
-  : (Value -> Lambda.Session -> msg)
+  : (Value -> Port.Session -> msg)
   -> ((Result String (List Secret)) -> msg)
   -> (msg -> model -> (model, Effect msg))
   -> LambdaMsg
@@ -389,74 +372,20 @@ updateEvent
   -> (LambdaModel model msg, Effect msg)
 updateEvent newEvent decrypted update event model =
   case event of
-    Lambda.SystemError err ->
+    Port.SystemError err ->
       (model, NoEffect)
-    Lambda.NewEvent data session ->
+    Port.NewEvent data session ->
       let (app, effect) = update (newEvent data session) model.app in
                                                                           ({model | app = app}, effect)
-    Lambda.Decrypted result ->
+    Port.Decrypted result ->
       let (app, effect) = update (decrypted result) model.app in
       ({model | app = app}, effect)
-    Lambda.HttpResponse id result ->
+    Port.HttpResponse id result ->
       let
-        (expect, m2) = httpMatch id model
-        (app, effect) = update (decodeResponse expect (Result.mapError myError result)) model.app
+        (expect, m2) = Http.httpMatch id model
+        (app, effect) = update (Http.decodeResponse expect (Result.mapError Http.publicError result)) model.app
       in
         ({m2 | app = app}, effect)
 
-
-decodeResponse : Expect msg -> Result HttpError String -> msg
-decodeResponse expect response =
-  case expect of
-    ExpectString decodeTagger ->
-      decodeTagger response
-
-type Expect msg
-  = ExpectString (Result HttpError String -> msg)
-
-expectJson : (Result HttpError a -> msg) -> Decode.Decoder a -> Expect msg
-expectJson tagger decoder =
-  ExpectString (Result.andThen (Decode.decodeString decoder >> Result.mapError BadBody)
-    >> tagger
-  )
-
-type alias HttpRequest msg =
-  { hostname : String
-  , path : String
-  , method : String
-  , headers : List Lambda.Header
-  , expect : Expect msg
-  }
-
-httpMatch : Int -> HttpModel model msg -> (Expect msg, HttpModel model msg)
-httpMatch id model =
-  case Dict.get id model.outstandingRequests of
-    Just expect ->
-      (expect, { model | outstandingRequests = Dict.remove id model.outstandingRequests })
-    Nothing ->
-      Debug.todo "response to unknown request"
-
-rememberHttpRequest : HttpRequest appMsg -> HttpModel model appMsg -> (HttpModel model appMsg, Cmd msg)
-rememberHttpRequest req model =
-  let
-    id = model.nextRequestId + 1
-  in
-  ( { model
-    | nextRequestId = id
-    , outstandingRequests = Dict.insert id req.expect model.outstandingRequests
-    }
-  , toLambdaRequest id req
-  )
-
-toLambdaRequest : RequestId -> HttpRequest appMsg -> Cmd msg
-toLambdaRequest id req =
-  Lambda.httpRequest
-    { hostname = req.hostname
-    , path = req.path
-    , method = req.method
-    , headers = req.headers
-    , id = id
-    }
-
 subscriptions : LambdaModel model msg -> Sub LambdaMsg
-subscriptions model = Lambda.event handle
+subscriptions model = Port.event handle
