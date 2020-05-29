@@ -2,7 +2,7 @@ module Handler exposing (main)
 
 import Env exposing (Env)
 import Event.Decode as Event
-import Lambda
+import Lambda exposing (Effect(..))
 import Lambda.Port as Port
 import Lambda.Http as Http
 import Reply.Encode as Encode
@@ -14,10 +14,7 @@ import State exposing (Retry(..), Request(..), State)
 import Twitch.Id.Decode as Id
 import Twitch.Helix.Decode as Helix
 
-import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Value)
-import Json.Encode as Encode
-import Platform
 
 type alias Model =
   { env : Env
@@ -34,7 +31,7 @@ type Msg
   | GotUsersById State (List Helix.User)
   | GotUsersByName State (List Helix.User)
 
-main = lambdaProgram
+main = Lambda.program
   { init = appInit
   , update = appUpdate
   , newEvent = NewEvent
@@ -304,88 +301,3 @@ fetchUserByName auth login state =
     , headers = oauthHeaders auth
     , expect = Http.expectJson (httpResponse state "fetchUserByName" GotUsersByName) Helix.users
     }
-
-
--------------------------------------
-
-type alias LambdaModel model msg =
-  { nextRequestId : Http.RequestId
-  , outstandingRequests : Dict Int (Http.Expect msg)
-  , app : model
-  }
-
-type Effect msg
-  = NoEffect
-  | Batch (List (Effect msg))
-  | Decrypt (List Secret)
-  | Http (Http.Request msg)
-  | Response Port.Session (Result String Value)
-
-perform : (LambdaModel model appMsg, Effect appMsg) -> (LambdaModel model appMsg, Cmd msg)
-perform (model, effect) =
-  case effect of
-    NoEffect -> (model, Cmd.none)
-    Batch effects ->
-      List.foldl (\eff (m, cmd) ->
-        let (m2, c2) = perform (m, eff) in
-        (m2, Cmd.batch [cmd, c2])
-      ) (model, Cmd.none) effects
-    Decrypt secrets -> (model, Port.decrypt secrets)
-    Http request -> Http.rememberHttpRequest request model
-    Response session result -> (model, Port.response session result)
-
-type alias LambdaMsg = Port.Event
-handle = identity
-
-lambdaProgram :
-  { init : flags -> (model, Effect msg)
-  , update : msg -> model -> (model, Effect msg)
-  , newEvent : Value -> Port.Session -> msg
-  , decrypted : (Result String (List Secret)) -> msg
-  }
-  -> Program flags (LambdaModel model msg) LambdaMsg
-lambdaProgram {init, update, newEvent, decrypted} =
-  Platform.worker
-    { init = lambdaInit init
-    , update = (\event model -> updateEvent newEvent decrypted update event model |> perform)
-    , subscriptions = subscriptions
-    }
-
-lambdaInit : (flags -> (model, Effect appMsg)) -> flags -> (LambdaModel model appMsg, Cmd msg)
-lambdaInit init flags =
-  let (app, effect) = init flags in
-  (initialLambdaModel app, Cmd.none)
-
-initialLambdaModel : model -> LambdaModel model msg
-initialLambdaModel app =
-  { nextRequestId = 0
-  , outstandingRequests = Dict.empty
-  , app = app
-  }
-
-updateEvent
-  : (Value -> Port.Session -> msg)
-  -> ((Result String (List Secret)) -> msg)
-  -> (msg -> model -> (model, Effect msg))
-  -> LambdaMsg
-  -> LambdaModel model msg
-  -> (LambdaModel model msg, Effect msg)
-updateEvent newEvent decrypted update event model =
-  case event of
-    Port.SystemError err ->
-      (model, NoEffect)
-    Port.NewEvent data session ->
-      let (app, effect) = update (newEvent data session) model.app in
-                                                                          ({model | app = app}, effect)
-    Port.Decrypted result ->
-      let (app, effect) = update (decrypted result) model.app in
-      ({model | app = app}, effect)
-    Port.HttpResponse id result ->
-      let
-        (expect, m2) = Http.httpMatch id model
-        (app, effect) = update (Http.decodeResponse expect (Result.mapError Http.publicError result)) model.app
-      in
-        ({m2 | app = app}, effect)
-
-subscriptions : LambdaModel model msg -> Sub LambdaMsg
-subscriptions model = Port.event handle
