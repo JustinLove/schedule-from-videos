@@ -40,9 +40,11 @@ type HttpError
 main = lambdaProgram
   { init = appInit
   , update = appUpdate
+  , newEvent = NewEvent
+  , decrypted = Decrypted
   }
 
-appInit : Value -> (Model, Effect)
+appInit : Value -> (Model, Effect Msg)
 appInit flags =
   case (Env.decode flags) of
     Ok env -> (initialModel env, NoEffect)
@@ -55,7 +57,7 @@ initialModel env =
   , pendingRequests = []
   }
 
-appUpdate : Msg -> Model -> (Model, Effect)
+appUpdate : Msg -> Model -> (Model, Effect Msg)
 appUpdate msg model =
   case msg of
     NewEvent data session ->
@@ -156,7 +158,7 @@ stateForEvent event session =
     Event.User {userName} ->
       State.fetchUser userName session
 
-step : Model -> (Model, Effect)
+step : Model -> (Model, Effect Msg)
 step model =
   case model.env of
     Env.Plain env ->
@@ -168,30 +170,30 @@ step model =
     Env.Encrypted {clientId, clientSecret} ->
       (model, Decrypt [clientId, clientSecret])
 
-appendState : State -> Model -> (Model, Effect)
+appendState : State -> Model -> (Model, Effect Msg)
 appendState state model =
   { model | pendingRequests = List.append model.pendingRequests [state] }
     |> step
 
-withAllRequests : (State -> Model -> (Model, Effect)) -> Model -> (Model, Effect)
+withAllRequests : (State -> Model -> (Model, Effect Msg)) -> Model -> (Model, Effect Msg)
 withAllRequests f model =
   model.pendingRequests
     |> List.foldl (commandFold f) ({model | pendingRequests = []}, NoEffect)
 
 commandFold
-  : (a -> model -> (model, Effect))
+  : (a -> model -> (model, Effect msg))
   -> a
-  -> (model, Effect)
-  -> (model, Effect)
+  -> (model, Effect msg)
+  -> (model, Effect msg)
 commandFold f a (model, cmd) =
   let (m, c) = f a model in
   (m, Batch [cmd, c])
 
-executeRequest : ApiAuth -> State -> Model -> (Model, Effect)
+executeRequest : ApiAuth -> State -> Model -> (Model, Effect Msg)
 executeRequest auth state model =
   (model, stateRequest auth state)
 
-stateRequest : ApiAuth -> State -> Effect
+stateRequest : ApiAuth -> State -> Effect Msg
 stateRequest auth state =
   case state.request of
     FetchVideos {userId} ->
@@ -203,27 +205,27 @@ stateRequest auth state =
     FetchUser {userName} ->
       fetchUserByName auth userName state
 
-errorResponse : String -> Lambda.Session -> Effect
+errorResponse : String -> Lambda.Session -> Effect Msg
 errorResponse reason session =
   Response session (Err reason)
 
-errorResponseState : String -> State -> model -> (model, Effect)
+errorResponseState : String -> State -> model -> (model, Effect Msg)
 errorResponseState reason state model =
   (model, errorResponse reason state.session)
 
-sendResponse : Lambda.Session -> Value -> Effect
+sendResponse : Lambda.Session -> Value -> Effect Msg
 sendResponse session response =
   Response session (Ok response)
 
-type alias HttpRequest =
+type alias HttpRequest msg =
   { hostname : String
   , path : String
   , method : String
   , headers : List Lambda.Header
-  , expect : Expect Msg
+  , expect : Expect msg
   }
 
-httpRequest : HttpRequest -> Effect
+httpRequest : HttpRequest msg -> Effect msg
 httpRequest = Http
 
 standardHeaders =
@@ -256,7 +258,7 @@ tokenPath {clientId, clientSecret} =
     ++ "&client_secret=" ++ (Secret.toString clientSecret)
     ++ "&grant_type=client_credentials"
 
-fetchToken : Env.PlainEnv -> Effect
+fetchToken : Env.PlainEnv -> Effect Msg
 fetchToken env =
   httpRequest
     { hostname = tokenHostname
@@ -277,7 +279,7 @@ videosPath : String -> String
 videosPath userId =
   "/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : ApiAuth -> String -> State -> Effect
+fetchVideos : ApiAuth -> String -> State -> Effect Msg
 fetchVideos auth userId state =
   httpRequest
     { hostname = helixHostname
@@ -296,7 +298,7 @@ fetchUserByIdPath : String -> String
 fetchUserByIdPath userId =
   "/helix/users?id=" ++ userId
 
-fetchUserById : ApiAuth -> String -> State -> Effect
+fetchUserById : ApiAuth -> String -> State -> Effect Msg
 fetchUserById auth userId state =
   httpRequest
     { hostname = helixHostname
@@ -310,7 +312,7 @@ fetchUserByNamePath : String -> String
 fetchUserByNamePath login =
   "/helix/users?login=" ++ login
 
-fetchUserByName : ApiAuth -> String -> State -> Effect
+fetchUserByName : ApiAuth -> String -> State -> Effect Msg
 fetchUserByName auth login state =
   httpRequest
     { hostname = helixHostname
@@ -323,28 +325,28 @@ fetchUserByName auth login state =
 
 -------------------------------------
 
-type alias HttpModel model =
+type alias HttpModel model msg =
   { model
   | nextRequestId : RequestId
-  , outstandingRequests : Dict Int (Expect Msg)
+  , outstandingRequests : Dict Int (Expect msg)
   }
 
-type alias LambdaModel model =
+type alias LambdaModel model msg =
   { nextRequestId : RequestId
-  , outstandingRequests : Dict Int (Expect Msg)
+  , outstandingRequests : Dict Int (Expect msg)
   , app : model
   }
 
 type alias RequestId = Int
 
-type Effect
+type Effect msg
   = NoEffect
-  | Batch (List Effect)
+  | Batch (List (Effect msg))
   | Decrypt (List Secret)
-  | Http HttpRequest
+  | Http (HttpRequest msg)
   | Response Lambda.Session (Result String Value)
 
-perform : (HttpModel m, Effect) -> (HttpModel m, Cmd msg)
+perform : (HttpModel model appMsg, Effect appMsg) -> (HttpModel model appMsg, Cmd msg)
 perform (model, effect) =
   case effect of
     NoEffect -> (model, Cmd.none)
@@ -361,44 +363,47 @@ type alias LambdaMsg = Lambda.Event
 handle = identity
 
 lambdaProgram :
-  { init : Value -> (model, Effect)
-  , update : Msg -> model -> (model, Effect)
+  { init : flags -> (model, Effect msg)
+  , update : msg -> model -> (model, Effect msg)
+  , newEvent : Value -> Lambda.Session -> msg
+  , decrypted : (Result String (List Secret)) -> msg
   }
-  -> Program Value (LambdaModel model) LambdaMsg
-lambdaProgram {init, update} =
+  -> Program flags (LambdaModel model msg) LambdaMsg
+lambdaProgram {init, update, newEvent, decrypted} =
   Platform.worker
     { init = lambdaInit init
-    , update = lambdaUpdate update
+    , update = (\event model -> updateEvent newEvent decrypted update event model |> perform)
     , subscriptions = subscriptions
     }
 
-lambdaInit : (flags -> (model, Effect)) -> flags -> (LambdaModel model, Cmd msg)
+lambdaInit : (flags -> (model, Effect appMsg)) -> flags -> (LambdaModel model appMsg, Cmd msg)
 lambdaInit init flags =
   let (app, effect) = init flags in
   (initialLambdaModel app, Cmd.none)
 
-initialLambdaModel : model -> LambdaModel model
+initialLambdaModel : model -> LambdaModel model msg
 initialLambdaModel app =
   { nextRequestId = 0
   , outstandingRequests = Dict.empty
   , app = app
   }
 
-lambdaUpdate : (Msg -> model -> (model, Effect)) -> LambdaMsg -> LambdaModel model -> (LambdaModel model, Cmd LambdaMsg)
-lambdaUpdate update event model =
-  updateEvent update event model
-    |> perform
-
-updateEvent : (Msg -> model -> (model, Effect)) -> Lambda.Event -> LambdaModel model -> (LambdaModel model, Effect)
-updateEvent update event model =
+updateEvent
+  : (Value -> Lambda.Session -> msg)
+  -> ((Result String (List Secret)) -> msg)
+  -> (msg -> model -> (model, Effect msg))
+  -> LambdaMsg
+  -> LambdaModel model msg
+  -> (LambdaModel model msg, Effect msg)
+updateEvent newEvent decrypted update event model =
   case event of
     Lambda.SystemError err ->
       (model, NoEffect)
     Lambda.NewEvent data session ->
-      let (app, effect) = update (NewEvent data session) model.app in
+      let (app, effect) = update (newEvent data session) model.app in
                                                                           ({model | app = app}, effect)
     Lambda.Decrypted result ->
-      let (app, effect) = update (Decrypted result) model.app in
+      let (app, effect) = update (decrypted result) model.app in
       ({model | app = app}, effect)
     Lambda.HttpResponse id result ->
       let
@@ -423,7 +428,7 @@ expectJson tagger decoder =
     >> tagger
   )
 
-httpMatch : Int -> HttpModel m -> (Expect Msg, HttpModel m)
+httpMatch : Int -> HttpModel model msg -> (Expect msg, HttpModel model msg)
 httpMatch id model =
   case Dict.get id model.outstandingRequests of
     Just expect ->
@@ -431,7 +436,7 @@ httpMatch id model =
     Nothing ->
       Debug.todo "response to unknown request"
 
-rememberHttpRequest : HttpRequest -> HttpModel m -> (HttpModel m, Cmd msg)
+rememberHttpRequest : HttpRequest appMsg -> HttpModel model appMsg -> (HttpModel model appMsg, Cmd msg)
 rememberHttpRequest req model =
   let
     id = model.nextRequestId + 1
@@ -443,7 +448,7 @@ rememberHttpRequest req model =
   , toLambdaRequest id req
   )
 
-toLambdaRequest : RequestId -> HttpRequest -> Cmd msg
+toLambdaRequest : RequestId -> HttpRequest appMsg -> Cmd msg
 toLambdaRequest id req =
   Lambda.httpRequest
     { hostname = req.hostname
@@ -453,5 +458,5 @@ toLambdaRequest id req =
     , id = id
     }
 
-subscriptions : LambdaModel m -> Sub LambdaMsg
+subscriptions : LambdaModel model msg -> Sub LambdaMsg
 subscriptions model = Lambda.event handle
