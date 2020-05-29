@@ -20,12 +20,8 @@ import Platform
 type alias Model =
   { env : Env
   , auth : Maybe Secret
-  , nextRequestId : RequestId
-  , outstandingRequests : Dict Int (Expect Msg)
   , pendingRequests : List State
   }
-
-type alias RequestId = Int
 
 type Msg
   = NewEvent Value Lambda.Session
@@ -41,29 +37,26 @@ type HttpError
   | NetworkError
   | BadBody Decode.Error
 
-main = Platform.worker
-  { init = init
-  , update = lambdaUpdate
-  , subscriptions = subscriptions
+main = lambdaProgram
+  { init = appInit
+  , update = appUpdate
   }
 
-init : Value -> (Model, Cmd msg)
-init flags =
+appInit : Value -> (Model, Effect)
+appInit flags =
   case (Env.decode flags) of
-    Ok env -> (initialModel env, Cmd.none)
+    Ok env -> (initialModel env, NoEffect)
     Err err -> Debug.todo ("env decode error" ++ (Debug.toString err))
 
 initialModel : Env -> Model
 initialModel env =
   { env = env
   , auth = Nothing
-  , nextRequestId = 0
-  , outstandingRequests = Dict.empty
   , pendingRequests = []
   }
 
-update : Msg -> Model -> (Model, Effect)
-update msg model =
+appUpdate : Msg -> Model -> (Model, Effect)
+appUpdate msg model =
   case msg of
     NewEvent data session ->
       case Decode.decodeValue Event.event data of
@@ -330,6 +323,20 @@ fetchUserByName auth login state =
 
 -------------------------------------
 
+type alias HttpModel model =
+  { model
+  | nextRequestId : RequestId
+  , outstandingRequests : Dict Int (Expect Msg)
+  }
+
+type alias LambdaModel model =
+  { nextRequestId : RequestId
+  , outstandingRequests : Dict Int (Expect Msg)
+  , app : model
+  }
+
+type alias RequestId = Int
+
 type Effect
   = NoEffect
   | Batch (List Effect)
@@ -337,7 +344,7 @@ type Effect
   | Http HttpRequest
   | Response Lambda.Session (Result String Value)
 
-perform : (Model, Effect) -> (Model, Cmd msg)
+perform : (HttpModel m, Effect) -> (HttpModel m, Cmd msg)
 perform (model, effect) =
   case effect of
     NoEffect -> (model, Cmd.none)
@@ -353,23 +360,53 @@ perform (model, effect) =
 type alias LambdaMsg = Lambda.Event
 handle = identity
 
-lambdaUpdate : LambdaMsg -> Model -> (Model, Cmd LambdaMsg)
-lambdaUpdate event model =
-  updateEvent event model
+lambdaProgram :
+  { init : Value -> (model, Effect)
+  , update : Msg -> model -> (model, Effect)
+  }
+  -> Program Value (LambdaModel model) LambdaMsg
+lambdaProgram {init, update} =
+  Platform.worker
+    { init = lambdaInit init
+    , update = lambdaUpdate update
+    , subscriptions = subscriptions
+    }
+
+lambdaInit : (flags -> (model, Effect)) -> flags -> (LambdaModel model, Cmd msg)
+lambdaInit init flags =
+  let (app, effect) = init flags in
+  (initialLambdaModel app, Cmd.none)
+
+initialLambdaModel : model -> LambdaModel model
+initialLambdaModel app =
+  { nextRequestId = 0
+  , outstandingRequests = Dict.empty
+  , app = app
+  }
+
+lambdaUpdate : (Msg -> model -> (model, Effect)) -> LambdaMsg -> LambdaModel model -> (LambdaModel model, Cmd LambdaMsg)
+lambdaUpdate update event model =
+  updateEvent update event model
     |> perform
 
-updateEvent : Lambda.Event -> Model -> (Model, Effect)
-updateEvent event model =
+updateEvent : (Msg -> model -> (model, Effect)) -> Lambda.Event -> LambdaModel model -> (LambdaModel model, Effect)
+updateEvent update event model =
   case event of
     Lambda.SystemError err ->
       (model, NoEffect)
     Lambda.NewEvent data session ->
-      update (NewEvent data session) model
+      let (app, effect) = update (NewEvent data session) model.app in
+                                                                          ({model | app = app}, effect)
     Lambda.Decrypted result ->
-      update (Decrypted result) model
+      let (app, effect) = update (Decrypted result) model.app in
+      ({model | app = app}, effect)
     Lambda.HttpResponse id result ->
-      let (expect, m2) = httpMatch id model in
-      update (decodeResponse expect (Result.mapError myError result)) m2
+      let
+        (expect, m2) = httpMatch id model
+        (app, effect) = update (decodeResponse expect (Result.mapError myError result)) model.app
+      in
+        ({m2 | app = app}, effect)
+
 
 decodeResponse : Expect msg -> Result HttpError String -> msg
 decodeResponse expect response =
@@ -386,7 +423,7 @@ expectJson tagger decoder =
     >> tagger
   )
 
-httpMatch : Int -> Model -> (Expect Msg, Model)
+httpMatch : Int -> HttpModel m -> (Expect Msg, HttpModel m)
 httpMatch id model =
   case Dict.get id model.outstandingRequests of
     Just expect ->
@@ -394,7 +431,7 @@ httpMatch id model =
     Nothing ->
       Debug.todo "response to unknown request"
 
-rememberHttpRequest : HttpRequest -> Model -> (Model, Cmd msg)
+rememberHttpRequest : HttpRequest -> HttpModel m -> (HttpModel m, Cmd msg)
 rememberHttpRequest req model =
   let
     id = model.nextRequestId + 1
@@ -416,5 +453,5 @@ toLambdaRequest id req =
     , id = id
     }
 
-subscriptions : Model -> Sub LambdaMsg
+subscriptions : LambdaModel m -> Sub LambdaMsg
 subscriptions model = Lambda.event handle
