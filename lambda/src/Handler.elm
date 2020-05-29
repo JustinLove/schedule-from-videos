@@ -217,15 +217,7 @@ sendResponse : Lambda.Session -> Value -> Effect Msg
 sendResponse session response =
   Response session (Ok response)
 
-type alias HttpRequest msg =
-  { hostname : String
-  , path : String
-  , method : String
-  , headers : List Lambda.Header
-  , expect : Expect msg
-  }
-
-httpRequest : HttpRequest msg -> Effect msg
+httpRequest : HttpRequest Msg -> Effect Msg
 httpRequest = Http
 
 standardHeaders =
@@ -427,6 +419,14 @@ expectJson tagger decoder =
   ExpectString (Result.andThen (Decode.decodeString decoder >> Result.mapError BadBody)
     >> tagger
   )
+
+type alias HttpRequest msg =
+  { hostname : String
+  , path : String
+  , method : String
+  , headers : List Lambda.Header
+  , expect : Expect msg
+  }
 
 httpMatch : Int -> HttpModel model msg -> (Expect msg, HttpModel model msg)
 httpMatch id model =
