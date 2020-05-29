@@ -1,7 +1,5 @@
 - working plan: aws lambda, node
   - refactoring
-    - HttpRequest types are kind of both lambda
-      - might fix Http effect name
     - encapsulate http responses
     - next action?
   - check jwt - twitch onAuthorized token

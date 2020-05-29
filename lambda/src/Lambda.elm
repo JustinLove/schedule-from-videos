@@ -31,7 +31,7 @@ type Effect msg
   = NoEffect
   | Batch (List (Effect msg))
   | Decrypt (List Secret)
-  | Http (Http.Request msg)
+  | HttpRequest (Http.Request msg)
   | Response Session (Result String Value)
 
 perform : (Model model appMsg, Effect appMsg) -> (Model model appMsg, Cmd msg)
@@ -44,7 +44,7 @@ perform (model, effect) =
         (m2, Cmd.batch [cmd, c2])
       ) (model, Cmd.none) effects
     Decrypt secrets -> (model, Port.decrypt secrets)
-    Http request -> Http.rememberHttpRequest request model
+    HttpRequest request -> Http.rememberHttpRequest request model
     Response session result -> (model, Port.response session result)
 
 program :

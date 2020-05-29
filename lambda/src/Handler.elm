@@ -206,7 +206,7 @@ sendResponse session response =
   Response session (Ok response)
 
 httpRequest : Http.Request Msg -> Effect Msg
-httpRequest = Http
+httpRequest = HttpRequest
 
 standardHeaders =
   [ Port.header "User-Agent" "Schedule From Videos Lambda"
