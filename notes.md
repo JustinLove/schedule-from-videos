@@ -1,6 +1,5 @@
 - working plan: aws lambda, node
   - refactoring
-    - lifting lambda program
     - HttpRequest types are kind of both lambda
       - might fix Http effect name
     - encapsulate http responses

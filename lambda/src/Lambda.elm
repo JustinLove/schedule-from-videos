@@ -81,17 +81,23 @@ update newEvent decrypted appUpdate event model =
     Port.SystemError err ->
       (model, NoEffect)
     Port.NewEvent data session ->
-      let (app, effect) = appUpdate (newEvent data session) model.app in
-                                                                          ({model | app = app}, effect)
+      applyUpdate appUpdate (newEvent data session) model
     Port.Decrypted result ->
-      let (app, effect) = appUpdate (decrypted result) model.app in
-      ({model | app = app}, effect)
+      applyUpdate appUpdate (decrypted result) model
     Port.HttpResponse id result ->
       let
         (appMsg, m2) = Http.toMsg id result model
-        (app, effect) = appUpdate appMsg model.app
       in
-        ({m2 | app = app}, effect)
+        applyUpdate appUpdate appMsg m2
+
+applyUpdate
+  : (msg -> model -> (model, Effect msg))
+  -> msg
+  -> Model model msg
+  -> (Model model msg, Effect msg)
+applyUpdate appUpdate msg model =
+  let (app, effect) = appUpdate msg model.app in
+    ({model | app = app}, effect)
 
 subscriptions : Model model msg -> Sub LambdaMsg
 subscriptions model = Port.event handle
