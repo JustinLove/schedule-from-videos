@@ -88,8 +88,8 @@ update newEvent decrypted appUpdate event model =
       ({model | app = app}, effect)
     Port.HttpResponse id result ->
       let
-        (expect, m2) = Http.httpMatch id model
-        (app, effect) = appUpdate (Http.decodeResponse expect (Result.mapError Http.publicError result)) model.app
+        (appMsg, m2) = Http.toMsg id result model
+        (app, effect) = appUpdate appMsg model.app
       in
         ({m2 | app = app}, effect)
 

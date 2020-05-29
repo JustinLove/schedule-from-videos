@@ -3,11 +3,10 @@ module Lambda.Http exposing
   , publicError
   , Expect
   , expectJson
-  , decodeResponse
   , Request
   , RequestId
-  , httpMatch
   , rememberHttpRequest
+  , toMsg
   )
 
 import Lambda.Port as Port
@@ -87,3 +86,12 @@ toLambdaRequest id req =
     , id = id
     }
 
+toMsg : RequestId -> Result Port.HttpError String -> HttpModel model appMsg -> (appMsg, HttpModel model appMsg)
+toMsg id result model =
+  let
+    (expect, m2) = httpMatch id model
+    msg = result
+      |> Result.mapError publicError
+      |> decodeResponse expect
+  in
+    (msg, m2)
