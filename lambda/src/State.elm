@@ -5,7 +5,14 @@ module State exposing
   , fetchVideos
   , fetchVideosWithName
   , fetchUser
+  , Msg(..)
+  , Effect(..)
+  , update
   )
+
+import Reply.Encode as Encode
+
+import Twitch.Helix.Decode as Helix
 
 import Json.Encode exposing (Value)
 
@@ -45,3 +52,55 @@ fetchUser userName session =
   , shouldRetry = WillRetry
   , session = session
   }
+
+
+type Msg
+  = AuthenticationFailed String
+  | UserNotFound
+  | GotVideos (List Helix.Video)
+  | GotVideosWithName {userId : String, userName: String} (List Helix.Video)
+  | GotUsersById Helix.User
+  | GotUsersByName Helix.User
+
+type Effect
+ = Query State
+ | Response Value (Result String Value)
+
+update : Msg -> State -> Effect
+update msg state =
+  case msg of
+    AuthenticationFailed source ->
+      let _ = Debug.log "auth failed " source in
+      if state.shouldRetry == WillRetry then
+        Query {state|shouldRetry = Retried}
+      else
+        errorResponse state.session "unable to authenticate"
+    UserNotFound ->
+      errorResponse state.session "user not found"
+    GotVideos videos ->
+      Encode.videosReply {events = videos}
+        |> sendResponse state.session
+    GotVideosWithName {userId, userName} videos ->
+      Encode.videosWithNameReply
+        { user = { id = userId, name = userName }
+        , events = videos
+        }
+        |> sendResponse state.session
+    GotUsersById user ->
+      Query
+        {state|request = FetchVideosWithName
+          { userId = user.id
+          , userName = user.displayName
+          }
+        }
+    GotUsersByName user ->
+      Encode.userReply { user = {id = user.id, name = user.displayName } }
+        |> sendResponse state.session
+
+errorResponse : Value -> String -> Effect
+errorResponse session reason =
+  Response session (Err reason)
+
+sendResponse : Value -> Value -> Effect
+sendResponse session response =
+  Response session (Ok response)

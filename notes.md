@@ -1,7 +1,6 @@
 - working plan: aws lambda, node
   - refactoring
-    - can handler be smaller?
-    - next action?
+    - partial state update, app specific request sequences are mixed with some general twitch api support
   - compare with elm/http
   - compare with elm/sub
   - look for other core library features

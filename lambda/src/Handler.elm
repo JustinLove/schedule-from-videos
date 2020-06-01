@@ -2,7 +2,7 @@ module Handler exposing (main)
 
 import Env exposing (Env)
 import Event.Decode as Event
-import Lambda exposing (Effect(..))
+import Lambda exposing (Effect)
 import Lambda.Port as Port
 import Lambda.Http as Http
 import Reply.Encode as Encode
@@ -27,12 +27,7 @@ type Msg
   | Decrypted (Result String Env)
   | GotToken (Result Http.Error Secret)
   | HttpError State String Http.Error
-  | AuthenticationFailed State String
-  | UserNotFound State
-  | GotVideos State (List Helix.Video)
-  | GotVideosWithName {userId : String, userName: String} State (List Helix.Video)
-  | GotUsersById State Helix.User
-  | GotUsersByName State Helix.User
+  | WithState State State.Msg
 
 main = Lambda.program
   { init = appInit
@@ -44,7 +39,7 @@ main = Lambda.program
 appInit : Value -> (Model, Effect Msg)
 appInit flags =
   case (Env.decode flags) of
-    Ok env -> (initialModel env, NoEffect)
+    Ok env -> (initialModel env, Lambda.NoEffect)
     Err err -> Debug.todo ("env decode error" ++ (Debug.toString err))
 
 initialModel : Env -> Model
@@ -63,7 +58,7 @@ appUpdate msg model =
           appendState (stateForEvent ev session) model
         Err err ->
           let _ = Debug.log "event error" err in
-          (model, errorResponse "unrecognized event" session)
+          (model, errorResponse session "unrecognized event")
     Decrypted (Ok env) ->
       { model | env = env }
         |> step
@@ -78,42 +73,13 @@ appUpdate msg model =
       withAllRequests (errorResponseState "unable to fetch token") model
     HttpError state source error ->
       let _ = Debug.log ("http error: " ++ source) error in
-      (model, errorResponse "service http error" state.session)
-    AuthenticationFailed state source ->
-      let _ = Debug.log "auth failed " source in
-      if state.shouldRetry == WillRetry then
-        { model | auth = Nothing }
-          |> appendState {state|shouldRetry = Retried}
-      else
-        (model, errorResponse "unable to authenticate" state.session)
-    UserNotFound state ->
-      (model, errorResponse "user not found" state.session)
-    GotVideos state videos ->
-      ( model
-      , Encode.videosReply {events = videos}
-        |> sendResponse state.session
-      )
-    GotVideosWithName {userId, userName} state videos ->
-      ( model
-      , Encode.videosWithNameReply
-        { user = { id = userId, name = userName }
-        , events = videos
-        }
-        |> sendResponse state.session
-      )
-    GotUsersById state user ->
-      model
-        |> appendState
-          {state|request = FetchVideosWithName
-            { userId = user.id
-            , userName = user.displayName
-            }
-          }
-    GotUsersByName state user ->
-      ( model
-      , Encode.userReply { user = {id = user.id, name = user.displayName } }
-        |> sendResponse state.session
-      )
+      (model, errorResponse state.session "service http error")
+    WithState state stateMsg ->
+      case State.update stateMsg state of
+        State.Query newState ->
+          model |> appendState newState
+        State.Response session result ->
+          (model, Lambda.Response session result)
 
 decrypted : Result String (List Secret) -> Msg
 decrypted result =
@@ -133,18 +99,18 @@ decryptToEnv list =
     _ ->
       Err ("decrypt wrong number of arguments" ++ (List.length list |> String.fromInt))
 
-httpResponse : State -> String -> (State -> a -> Msg) -> Result Http.Error a -> Msg
+httpResponse : State -> String -> (a -> State.Msg) -> Result Http.Error a -> Msg
 httpResponse state source success result =
   case result of
-    Ok value -> success state value
-    Err (Http.BadStatus 401 body) -> AuthenticationFailed state source
+    Ok value -> WithState state (success value)
+    Err (Http.BadStatus 401 body) -> WithState state (State.AuthenticationFailed source)
     Err err -> HttpError state source err
 
-validateUser : (State -> Helix.User -> Msg) -> State -> (List Helix.User) -> Msg
-validateUser success state users =
+validateUser : (Helix.User -> State.Msg) -> (List Helix.User) -> State.Msg
+validateUser success users =
   case users of
-    user :: _ -> success state user
-    [] -> UserNotFound state
+    user :: _ -> success user
+    [] -> State.UserNotFound
 
 stateForEvent : Event.Event -> Lambda.Session -> State
 stateForEvent event session =
@@ -166,7 +132,7 @@ step model =
         Just auth ->
           withAllRequests (executeRequest (ApiAuth env.clientId auth)) model
     Env.Encrypted {clientId, clientSecret} ->
-      (model, Decrypt [clientId, clientSecret])
+      (model, Lambda.Decrypt [clientId, clientSecret])
 
 appendState : State -> Model -> (Model, Effect Msg)
 appendState state model =
@@ -176,7 +142,7 @@ appendState state model =
 withAllRequests : (State -> Model -> (Model, Effect Msg)) -> Model -> (Model, Effect Msg)
 withAllRequests f model =
   model.pendingRequests
-    |> List.foldl (commandFold f) ({model | pendingRequests = []}, NoEffect)
+    |> List.foldl (commandFold f) ({model | pendingRequests = []}, Lambda.NoEffect)
 
 commandFold
   : (a -> model -> (model, Effect msg))
@@ -185,7 +151,7 @@ commandFold
   -> (model, Effect msg)
 commandFold f a (model, cmd) =
   let (m, c) = f a model in
-  (m, Batch [cmd, c])
+  (m, Lambda.Batch [cmd, c])
 
 executeRequest : ApiAuth -> State -> Model -> (Model, Effect Msg)
 executeRequest auth state model =
@@ -203,20 +169,20 @@ stateRequest auth state =
     FetchUser {userName} ->
       fetchUserByName auth userName state
 
-errorResponse : String -> Lambda.Session -> Effect Msg
-errorResponse reason session =
-  Response session (Err reason)
+errorResponse : Lambda.Session -> String -> Effect Msg
+errorResponse session reason =
+  Lambda.Response session (Err reason)
 
 errorResponseState : String -> State -> model -> (model, Effect Msg)
 errorResponseState reason state model =
-  (model, errorResponse reason state.session)
+  (model, errorResponse state.session reason)
 
 sendResponse : Lambda.Session -> Value -> Effect Msg
 sendResponse session response =
-  Response session (Ok response)
+  Lambda.Response session (Ok response)
 
 httpRequest : Http.Request Msg -> Effect Msg
-httpRequest = HttpRequest
+httpRequest = Lambda.HttpRequest
 
 standardHeaders =
   [ Port.header "User-Agent" "Schedule From Videos Lambda"
@@ -276,7 +242,7 @@ fetchVideos auth userId state =
     , path = videosPath userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchVideos" GotVideos) decodeVideos
+    , expect = Http.expectJson (httpResponse state "fetchVideos" State.GotVideos) decodeVideos
     }
 
 fetchVideosWithName : ApiAuth -> {userId : String, userName: String} -> State -> Effect Msg
@@ -286,7 +252,7 @@ fetchVideosWithName auth user state =
     , path = videosPath user.userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchVideos" (GotVideosWithName user)) decodeVideos
+    , expect = Http.expectJson (httpResponse state "fetchVideos" (State.GotVideosWithName user)) decodeVideos
     }
 
 decodeVideos : Decode.Decoder (List Helix.Video)
@@ -305,7 +271,7 @@ fetchUserById auth userId state =
     , path =  fetchUserByIdPath userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchUserById" (validateUser GotUsersById)) Helix.users
+    , expect = Http.expectJson (httpResponse state "fetchUserById" (validateUser State.GotUsersById)) Helix.users
     }
 
 fetchUserByNamePath : String -> String
@@ -319,5 +285,5 @@ fetchUserByName auth login state =
     , path =  fetchUserByNamePath login
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchUserByName" (validateUser GotUsersByName)) Helix.users
+    , expect = Http.expectJson (httpResponse state "fetchUserByName" (validateUser State.GotUsersByName)) Helix.users
     }
