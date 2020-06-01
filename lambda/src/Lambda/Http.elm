@@ -5,6 +5,7 @@ module Lambda.Http exposing
   , expectJson
   , Request
   , RequestId
+  , map
   , rememberHttpRequest
   , toMsg
   )
@@ -28,6 +29,11 @@ publicError error =
 type Expect msg
   = ExpectString (Result Error String -> msg)
 
+expectMap : (a -> b) -> Expect a -> Expect b
+expectMap f expect =
+  case expect of
+    ExpectString tagger -> ExpectString (tagger >> f)
+
 expectJson : (Result Error a -> msg) -> Decode.Decoder a -> Expect msg
 expectJson tagger decoder =
   ExpectString (Result.andThen (Decode.decodeString decoder >> Result.mapError BadBody)
@@ -47,6 +53,17 @@ type alias Request msg =
   , headers : List Port.Header
   , expect : Expect msg
   }
+
+requestMap : (a -> b) -> Request a -> Request b
+requestMap f req =
+  { hostname = req.hostname
+  , path = req.path
+  , method = req.method
+  , headers = req.headers
+  , expect = expectMap f req.expect
+  }
+
+map = requestMap
 
 type alias RequestId = Int
 

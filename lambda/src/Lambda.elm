@@ -2,6 +2,7 @@ module Lambda exposing
   ( Session
   , Effect(..)
   , program
+  , effectMap
   )
 
 import Lambda.Port as Port
@@ -46,6 +47,15 @@ perform (model, effect) =
     Decrypt secrets -> (model, Port.decrypt secrets)
     HttpRequest request -> Http.rememberHttpRequest request model
     Response session result -> (model, Port.response session result)
+
+effectMap : (a -> b) -> Effect a -> Effect b
+effectMap f effect =
+  case effect of
+    NoEffect -> NoEffect
+    Batch effects -> List.map (effectMap f) effects |> Batch
+    Decrypt secrets -> Decrypt secrets
+    HttpRequest request -> HttpRequest (Http.map f request)
+    Response session result -> Response session result
 
 program :
   { init : flags -> (model, Effect msg)
