@@ -24,7 +24,7 @@ type alias Model =
 
 type Msg
   = NewEvent Value Lambda.Session
-  | Decrypted (Result String (List Secret))
+  | Decrypted (Result String Env)
   | GotToken (Result Http.Error Secret)
   | HttpError State String Http.Error
   | GotVideos State (List Helix.Video)
@@ -35,7 +35,7 @@ main = Lambda.program
   { init = appInit
   , update = appUpdate
   , newEvent = NewEvent
-  , decrypted = Decrypted
+  , decrypted = decrypted
   }
 
 appInit : Value -> (Model, Effect Msg)
@@ -61,17 +61,9 @@ appUpdate msg model =
         Err err ->
           let _ = Debug.log "event error" err in
           (model, errorResponse "unrecognized event" session)
-    Decrypted (Ok [id, secret]) ->
-      { model
-      | env = Env.Plain
-        { clientId = id
-        , clientSecret = secret
-        }
-      }
+    Decrypted (Ok env) ->
+      { model | env = env }
         |> step
-    Decrypted (Ok list) ->
-      let _ = Debug.log ("decrypt wrong number of arguments") (List.length list) in
-      withAllRequests (errorResponseState "service misconfiguration") model
     Decrypted (Err err) ->
       let _ = Debug.log ("decrypt error ") err in
       withAllRequests (errorResponseState "service misconfiguration") model
@@ -129,6 +121,24 @@ appUpdate msg model =
           )
         [] ->
           (model, errorResponse "user not found" state.session)
+
+decrypted : Result String (List Secret) -> Msg
+decrypted result =
+  result
+    |> Result.andThen decryptToEnv
+    |> Decrypted
+
+decryptToEnv : List Secret -> Result String Env
+decryptToEnv list =
+  case list of
+    [id, secret] ->
+      Env.Plain
+        { clientId = id
+        , clientSecret = secret
+        }
+        |> Ok
+    _ ->
+      Err ("decrypt wrong number of arguments" ++ (List.length list |> String.fromInt))
 
 httpResponse : State -> String -> (State -> a -> Msg) -> Result Http.Error a -> Msg
 httpResponse state source success result =
