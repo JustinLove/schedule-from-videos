@@ -27,6 +27,7 @@ type Msg
   | Decrypted (Result String Env)
   | GotToken (Result Http.Error Secret)
   | HttpError State String Http.Error
+  | AuthenticationFailed State String
   | GotVideos State (List Helix.Video)
   | GotVideosWithName {userId : String, userName: String} State (List Helix.Video)
   | GotUsersById State (List Helix.User)
@@ -74,16 +75,16 @@ appUpdate msg model =
     GotToken (Err err) ->
       let _ = Debug.log "unable to fetch token" err in
       withAllRequests (errorResponseState "unable to fetch token") model
-    HttpError state source (Http.BadStatus 401 body) ->
-      let _ = Debug.log ("auth failed " ++ source) body in
+    HttpError state source error ->
+      let _ = Debug.log ("http error: " ++ source) error in
+      (model, errorResponse "service http error" state.session)
+    AuthenticationFailed state source ->
+      let _ = Debug.log "auth failed " source in
       if state.shouldRetry == WillRetry then
         { model | auth = Nothing }
           |> appendState {state|shouldRetry = Retried}
       else
         (model, errorResponse "unable to authenticate" state.session)
-    HttpError state source (error) ->
-      let _ = Debug.log ("http error: " ++ source) error in
-      (model, errorResponse "service http error" state.session)
     GotVideos state videos ->
         ( model
         , Encode.videosReply {events = videos}
@@ -141,6 +142,7 @@ httpResponse : State -> String -> (State -> a -> Msg) -> Result Http.Error a -> 
 httpResponse state source success result =
   case result of
     Ok value -> success state value
+    Err (Http.BadStatus 401 body) -> AuthenticationFailed state source
     Err err -> HttpError state source err
 
 stateForEvent : Event.Event -> Lambda.Session -> State
