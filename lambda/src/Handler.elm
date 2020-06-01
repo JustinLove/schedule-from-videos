@@ -28,10 +28,11 @@ type Msg
   | GotToken (Result Http.Error Secret)
   | HttpError State String Http.Error
   | AuthenticationFailed State String
+  | UserNotFound State
   | GotVideos State (List Helix.Video)
   | GotVideosWithName {userId : String, userName: String} State (List Helix.Video)
-  | GotUsersById State (List Helix.User)
-  | GotUsersByName State (List Helix.User)
+  | GotUsersById State Helix.User
+  | GotUsersByName State Helix.User
 
 main = Lambda.program
   { init = appInit
@@ -85,40 +86,34 @@ appUpdate msg model =
           |> appendState {state|shouldRetry = Retried}
       else
         (model, errorResponse "unable to authenticate" state.session)
+    UserNotFound state ->
+      (model, errorResponse "user not found" state.session)
     GotVideos state videos ->
-        ( model
-        , Encode.videosReply {events = videos}
-          |> sendResponse state.session
-        )
+      ( model
+      , Encode.videosReply {events = videos}
+        |> sendResponse state.session
+      )
     GotVideosWithName {userId, userName} state videos ->
-        ( model
-        , Encode.videosWithNameReply
-          { user = { id = userId, name = userName }
-          , events = videos
+      ( model
+      , Encode.videosWithNameReply
+        { user = { id = userId, name = userName }
+        , events = videos
+        }
+        |> sendResponse state.session
+      )
+    GotUsersById state user ->
+      model
+        |> appendState
+          {state|request = FetchVideosWithName
+            { userId = user.id
+            , userName = user.displayName
+            }
           }
-          |> sendResponse state.session
-        )
-    GotUsersById state users ->
-      case users of
-        user :: _ ->
-          model
-            |> appendState
-              {state|request = FetchVideosWithName
-                { userId = user.id
-                , userName = user.displayName
-                }
-              }
-        [] ->
-          (model, errorResponse "user not found" state.session)
-    GotUsersByName state users ->
-      case users of
-        user :: _ ->
-          ( model
-          , Encode.userReply { user = {id = user.id, name = user.displayName } }
-            |> sendResponse state.session
-          )
-        [] ->
-          (model, errorResponse "user not found" state.session)
+    GotUsersByName state user ->
+      ( model
+      , Encode.userReply { user = {id = user.id, name = user.displayName } }
+        |> sendResponse state.session
+      )
 
 decrypted : Result String (List Secret) -> Msg
 decrypted result =
@@ -144,6 +139,12 @@ httpResponse state source success result =
     Ok value -> success state value
     Err (Http.BadStatus 401 body) -> AuthenticationFailed state source
     Err err -> HttpError state source err
+
+validateUser : (State -> Helix.User -> Msg) -> State -> (List Helix.User) -> Msg
+validateUser success state users =
+  case users of
+    user :: _ -> success state user
+    [] -> UserNotFound state
 
 stateForEvent : Event.Event -> Lambda.Session -> State
 stateForEvent event session =
@@ -304,7 +305,7 @@ fetchUserById auth userId state =
     , path =  fetchUserByIdPath userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchUserById" GotUsersById) Helix.users
+    , expect = Http.expectJson (httpResponse state "fetchUserById" (validateUser GotUsersById)) Helix.users
     }
 
 fetchUserByNamePath : String -> String
@@ -318,5 +319,5 @@ fetchUserByName auth login state =
     , path =  fetchUserByNamePath login
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchUserByName" GotUsersByName) Helix.users
+    , expect = Http.expectJson (httpResponse state "fetchUserByName" (validateUser GotUsersByName)) Helix.users
     }
