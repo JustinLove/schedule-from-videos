@@ -28,6 +28,7 @@ type Msg
   | GotToken (Result Http.Error Secret)
   | HttpError State String Http.Error
   | GotVideos State (List Helix.Video)
+  | GotVideosWithName {userId : String, userName: String} State (List Helix.Video)
   | GotUsersById State (List Helix.User)
   | GotUsersByName State (List Helix.User)
 
@@ -84,22 +85,18 @@ appUpdate msg model =
       let _ = Debug.log ("http error: " ++ source) error in
       (model, errorResponse "service http error" state.session)
     GotVideos state videos ->
-      case state.request of
-        FetchVideos _ ->
-          ( model
-          , Encode.videosReply {events = videos}
-            |> sendResponse state.session
-          )
-        FetchVideosWithName {userId, userName} ->
-          ( model
-          , Encode.videosWithNameReply
-            { user = { id = userId, name = userName }
-            , events = videos
-            }
-            |> sendResponse state.session
-          )
-        _ ->
-          Debug.todo "videos response in user fetch state"
+        ( model
+        , Encode.videosReply {events = videos}
+          |> sendResponse state.session
+        )
+    GotVideosWithName {userId, userName} state videos ->
+        ( model
+        , Encode.videosWithNameReply
+          { user = { id = userId, name = userName }
+          , events = videos
+          }
+          |> sendResponse state.session
+        )
     GotUsersById state users ->
       case users of
         user :: _ ->
@@ -198,8 +195,8 @@ stateRequest auth state =
       fetchVideos auth userId state
     FetchVideosAndName {userId} ->
       fetchUserById auth userId state
-    FetchVideosWithName {userId} ->
-      fetchVideos auth userId state
+    FetchVideosWithName user ->
+      fetchVideosWithName auth user state
     FetchUser {userName} ->
       fetchUserByName auth userName state
 
@@ -277,6 +274,16 @@ fetchVideos auth userId state =
     , method = "GET"
     , headers = oauthHeaders auth
     , expect = Http.expectJson (httpResponse state "fetchVideos" GotVideos) decodeVideos
+    }
+
+fetchVideosWithName : ApiAuth -> {userId : String, userName: String} -> State -> Effect Msg
+fetchVideosWithName auth user state =
+  httpRequest
+    { hostname = helixHostname
+    , path = videosPath user.userId
+    , method = "GET"
+    , headers = oauthHeaders auth
+    , expect = Http.expectJson (httpResponse state "fetchVideos" (GotVideosWithName user)) decodeVideos
     }
 
 decodeVideos : Decode.Decoder (List Helix.Video)
