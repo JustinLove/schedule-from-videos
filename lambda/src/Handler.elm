@@ -271,7 +271,7 @@ fetchUserById auth userId state =
     , path =  fetchUserByIdPath userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchUserById" (validateUser State.GotUsersById)) Helix.users
+    , expect = Http.expectJson (httpResponse state "fetchUserById" (validateUser State.GotUserById)) Helix.users
     }
 
 fetchUserByNamePath : String -> String
@@ -285,5 +285,5 @@ fetchUserByName auth login state =
     , path =  fetchUserByNamePath login
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchUserByName" (validateUser State.GotUsersByName)) Helix.users
+    , expect = Http.expectJson (httpResponse state "fetchUserByName" (validateUser State.GotUserByName)) Helix.users
     }

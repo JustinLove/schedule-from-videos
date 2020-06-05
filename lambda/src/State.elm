@@ -59,8 +59,8 @@ type Msg
   | UserNotFound
   | GotVideos (List Helix.Video)
   | GotVideosWithName {userId : String, userName: String} (List Helix.Video)
-  | GotUsersById Helix.User
-  | GotUsersByName Helix.User
+  | GotUserById Helix.User
+  | GotUserByName Helix.User
 
 type Effect
  = Query State
@@ -86,14 +86,14 @@ update msg state =
         , events = videos
         }
         |> sendResponse state.session
-    GotUsersById user ->
+    GotUserById user ->
       Query
         {state|request = FetchVideosWithName
           { userId = user.id
           , userName = user.displayName
           }
         }
-    GotUsersByName user ->
+    GotUserByName user ->
       Encode.userReply { user = {id = user.id, name = user.displayName } }
         |> sendResponse state.session
 
