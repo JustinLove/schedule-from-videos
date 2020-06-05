@@ -97,19 +97,6 @@ decryptToEnv list =
     _ ->
       Err ("decrypt wrong number of arguments" ++ (List.length list |> String.fromInt))
 
-httpResponse : String -> (a -> State.Msg) -> Result Http.Error a -> State.Msg
-httpResponse source success result =
-  case result of
-    Ok value -> success value
-    Err (Http.BadStatus 401 body) -> State.AuthenticationFailed source
-    Err err -> State.HttpError source err
-
-validateUser : (Helix.User -> State.Msg) -> (List Helix.User) -> State.Msg
-validateUser success users =
-  case users of
-    user :: _ -> success user
-    [] -> State.UserNotFound
-
 stateForEvent : Event.Event -> Lambda.Session -> State
 stateForEvent event session =
   case event of
@@ -154,23 +141,11 @@ commandFold f a (model, cmd) =
 executeRequest : ApiAuth -> State -> Model -> (Model, Effect Msg)
 executeRequest auth state model =
   ( model
-  , requestQuery state.request
+  , State.toHttp state.request
     |> withAuth auth
     |> Http.map (WithState state)
     |> Lambda.HttpRequest
   )
-
-requestQuery : State.Request -> Http.Request State.Msg
-requestQuery request =
-  case request of
-    FetchVideos {userId} ->
-      fetchVideos userId
-    FetchVideosAndName {userId} ->
-      fetchUserById userId
-    FetchVideosWithName user ->
-      fetchVideosWithName user
-    FetchUser {userName} ->
-      fetchUserByName userName
 
 errorResponse : Lambda.Session -> String -> Effect Msg
 errorResponse session reason =
@@ -229,51 +204,3 @@ decodeToken =
   Id.appOAuth
     |> Decode.map (.accessToken>>Secret.fromString)
 
-videosUrl : String -> String
-videosUrl userId =
-  "https://api.twitch.tv/helix/videos?first=100&type=archive&user_id=" ++ userId
-
-fetchVideos : String -> Http.Request State.Msg
-fetchVideos userId =
-  { url = videosUrl userId
-  , method = "GET"
-  , headers = []
-  , expect = Http.expectJson (httpResponse "fetchVideos" State.GotVideos) decodeVideos
-  }
-
-fetchVideosWithName : {userId : String, userName: String} -> Http.Request State.Msg
-fetchVideosWithName user =
-  { url = videosUrl user.userId
-  , method = "GET"
-  , headers = []
-  , expect = Http.expectJson (httpResponse "fetchVideos" (State.GotVideosWithName user)) decodeVideos
-  }
-
-decodeVideos : Decode.Decoder (List Helix.Video)
-decodeVideos =
-  Helix.videos
-    |> Decode.map (List.filter (\v -> v.videoType == Helix.Archive))
-
-fetchUserByIdUrl : String -> String
-fetchUserByIdUrl userId =
-  "https://api.twitch.tv/helix/users?id=" ++ userId
-
-fetchUserById : String -> Http.Request State.Msg
-fetchUserById userId =
-  { url =  fetchUserByIdUrl userId
-  , method = "GET"
-  , headers = []
-  , expect = Http.expectJson (httpResponse "fetchUserById" (validateUser State.GotUserById)) Helix.users
-  }
-
-fetchUserByNameUrl : String -> String
-fetchUserByNameUrl login =
-  "https://api.twitch.tv/helix/users?login=" ++ login
-
-fetchUserByName : String -> Http.Request State.Msg
-fetchUserByName login =
-  { url =  fetchUserByNameUrl login
-  , method = "GET"
-  , headers = []
-  , expect = Http.expectJson (httpResponse "fetchUserByName" (validateUser State.GotUserByName)) Helix.users
-  }
