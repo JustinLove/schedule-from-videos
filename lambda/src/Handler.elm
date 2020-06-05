@@ -78,6 +78,8 @@ appUpdate msg model =
       case State.update stateMsg state of
         State.Query newState ->
           model |> appendState newState
+        State.AuthReset newState ->
+          {model|auth = Nothing} |> appendState newState
         State.Response session result ->
           (model, Lambda.Response session result)
 

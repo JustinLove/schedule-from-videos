@@ -64,15 +64,16 @@ type Msg
 
 type Effect
  = Query State
+ | AuthReset State
  | Response Value (Result String Value)
 
 update : Msg -> State -> Effect
 update msg state =
-  case Debug.log "state msg" msg of
+  case msg of
     AuthenticationFailed source ->
       let _ = Debug.log "auth failed " source in
       if state.shouldRetry == WillRetry then
-        Query {state|shouldRetry = Retried}
+        AuthReset {state|shouldRetry = Retried}
       else
         errorResponse state.session "unable to authenticate"
     UserNotFound ->
