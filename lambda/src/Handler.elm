@@ -8,8 +8,6 @@ import Lambda.Http as Http
 import Reply.Encode as Encode
 import Secret exposing (Secret)
 import State exposing (Retry(..), Request(..), State)
---import State.Decode as Decode
---import State.Encode as Encode
 
 import Twitch.Id.Decode as Id
 import Twitch.Helix.Decode as Helix
