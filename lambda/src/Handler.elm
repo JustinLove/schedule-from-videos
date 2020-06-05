@@ -26,7 +26,6 @@ type Msg
   = NewEvent Value Lambda.Session
   | Decrypted (Result String Env)
   | GotToken (Result Http.Error Secret)
-  | HttpError State String Http.Error
   | WithState State State.Msg
 
 main = Lambda.program
@@ -71,9 +70,6 @@ appUpdate msg model =
     GotToken (Err err) ->
       let _ = Debug.log "unable to fetch token" err in
       withAllRequests (errorResponseState "unable to fetch token") model
-    HttpError state source error ->
-      let _ = Debug.log ("http error: " ++ source) error in
-      (model, errorResponse state.session "service http error")
     WithState state stateMsg ->
       case State.update stateMsg state of
         State.Query newState ->
@@ -101,12 +97,12 @@ decryptToEnv list =
     _ ->
       Err ("decrypt wrong number of arguments" ++ (List.length list |> String.fromInt))
 
-httpResponse : State -> String -> (a -> State.Msg) -> Result Http.Error a -> Msg
-httpResponse state source success result =
+httpResponse : String -> (a -> State.Msg) -> Result Http.Error a -> State.Msg
+httpResponse source success result =
   case result of
-    Ok value -> WithState state (success value)
-    Err (Http.BadStatus 401 body) -> WithState state (State.AuthenticationFailed source)
-    Err err -> HttpError state source err
+    Ok value -> success value
+    Err (Http.BadStatus 401 body) -> State.AuthenticationFailed source
+    Err err -> State.HttpError source err
 
 validateUser : (Helix.User -> State.Msg) -> (List Helix.User) -> State.Msg
 validateUser success users =
@@ -157,19 +153,19 @@ commandFold f a (model, cmd) =
 
 executeRequest : ApiAuth -> State -> Model -> (Model, Effect Msg)
 executeRequest auth state model =
-  (model, stateRequest auth state)
+  (model, requestQuery auth state.request |> Lambda.effectMap (WithState state))
 
-stateRequest : ApiAuth -> State -> Effect Msg
-stateRequest auth state =
-  case state.request of
+requestQuery : ApiAuth -> State.Request -> Effect State.Msg
+requestQuery auth request =
+  case request of
     FetchVideos {userId} ->
-      fetchVideos auth userId state
+      fetchVideos auth userId
     FetchVideosAndName {userId} ->
-      fetchUserById auth userId state
+      fetchUserById auth userId
     FetchVideosWithName user ->
-      fetchVideosWithName auth user state
+      fetchVideosWithName auth user
     FetchUser {userName} ->
-      fetchUserByName auth userName state
+      fetchUserByName auth userName
 
 errorResponse : Lambda.Session -> String -> Effect Msg
 errorResponse session reason =
@@ -183,7 +179,7 @@ sendResponse : Lambda.Session -> Value -> Effect Msg
 sendResponse session response =
   Lambda.Response session (Ok response)
 
-httpRequest : Http.Request Msg -> Effect Msg
+httpRequest : Http.Request msg -> Effect msg
 httpRequest = Lambda.HttpRequest
 
 standardHeaders =
@@ -231,22 +227,22 @@ videosUrl : String -> String
 videosUrl userId =
   "https://api.twitch.tv/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : ApiAuth -> String -> State -> Effect Msg
-fetchVideos auth userId state =
+fetchVideos : ApiAuth -> String -> Effect State.Msg
+fetchVideos auth userId =
   httpRequest
     { url = videosUrl userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchVideos" State.GotVideos) decodeVideos
+    , expect = Http.expectJson (httpResponse "fetchVideos" State.GotVideos) decodeVideos
     }
 
-fetchVideosWithName : ApiAuth -> {userId : String, userName: String} -> State -> Effect Msg
-fetchVideosWithName auth user state =
+fetchVideosWithName : ApiAuth -> {userId : String, userName: String} -> Effect State.Msg
+fetchVideosWithName auth user =
   httpRequest
     { url = videosUrl user.userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchVideos" (State.GotVideosWithName user)) decodeVideos
+    , expect = Http.expectJson (httpResponse "fetchVideos" (State.GotVideosWithName user)) decodeVideos
     }
 
 decodeVideos : Decode.Decoder (List Helix.Video)
@@ -258,24 +254,24 @@ fetchUserByIdUrl : String -> String
 fetchUserByIdUrl userId =
   "https://api.twitch.tv/helix/users?id=" ++ userId
 
-fetchUserById : ApiAuth -> String -> State -> Effect Msg
-fetchUserById auth userId state =
+fetchUserById : ApiAuth -> String -> Effect State.Msg
+fetchUserById auth userId =
   httpRequest
     { url =  fetchUserByIdUrl userId
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchUserById" (validateUser State.GotUserById)) Helix.users
+    , expect = Http.expectJson (httpResponse "fetchUserById" (validateUser State.GotUserById)) Helix.users
     }
 
 fetchUserByNameUrl : String -> String
 fetchUserByNameUrl login =
   "https://api.twitch.tv/helix/users?login=" ++ login
 
-fetchUserByName : ApiAuth -> String -> State -> Effect Msg
-fetchUserByName auth login state =
+fetchUserByName : ApiAuth -> String -> Effect State.Msg
+fetchUserByName auth login =
   httpRequest
     { url =  fetchUserByNameUrl login
     , method = "GET"
     , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse state "fetchUserByName" (validateUser State.GotUserByName)) Helix.users
+    , expect = Http.expectJson (httpResponse "fetchUserByName" (validateUser State.GotUserByName)) Helix.users
     }

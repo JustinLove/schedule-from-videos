@@ -10,6 +10,7 @@ module State exposing
   , update
   )
 
+import Lambda.Http as Http
 import Reply.Encode as Encode
 
 import Twitch.Helix.Decode as Helix
@@ -56,6 +57,7 @@ fetchUser userName session =
 
 type Msg
   = AuthenticationFailed String
+  | HttpError String Http.Error
   | UserNotFound
   | GotVideos (List Helix.Video)
   | GotVideosWithName {userId : String, userName: String} (List Helix.Video)
@@ -76,6 +78,9 @@ update msg state =
         AuthReset {state|shouldRetry = Retried}
       else
         errorResponse state.session "unable to authenticate"
+    HttpError source error ->
+      let _ = Debug.log ("http error: " ++ source) error in
+      errorResponse state.session "service http error"
     UserNotFound ->
       errorResponse state.session "user not found"
     GotVideos videos ->
