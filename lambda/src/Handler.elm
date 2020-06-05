@@ -1,16 +1,13 @@
 module Handler exposing (main)
 
 import Env exposing (Env)
-import Event.Decode as Event
 import Lambda exposing (Effect)
 import Lambda.Port as Port
 import Lambda.Http as Http
-import Reply.Encode as Encode
 import Secret exposing (Secret)
-import State exposing (Retry(..), Request(..), State)
+import State exposing (State)
 
 import Twitch.Id.Decode as Id
-import Twitch.Helix.Decode as Helix
 
 import Json.Decode as Decode exposing (Value)
 

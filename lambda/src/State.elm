@@ -15,8 +15,9 @@ import Reply.Encode as Encode
 
 import Twitch.Helix.Decode as Helix
 
-import Json.Decode as Decode
-import Json.Encode exposing (Value)
+import Json.Decode as Decode exposing (Value)
+
+type alias Session = Value
 
 type Retry
   = Retried
@@ -31,31 +32,31 @@ type Request
 type alias State =
   { request : Request
   , shouldRetry : Retry
-  , session : Value
+  , session : Session
   }
 
-initVideos : String -> Value -> State
+initVideos : String -> Session -> State
 initVideos userId session =
   { request = FetchVideos {userId = userId}
   , shouldRetry = WillRetry
   , session = session
   }
 
-initVideosWithName : String -> Value -> State
+initVideosWithName : String -> Session -> State
 initVideosWithName userId session =
   { request = FetchVideosAndName {userId = userId}
   , shouldRetry = WillRetry
   , session = session
   }
 
-initUser : String -> Value -> State
+initUser : String -> Session -> State
 initUser userName session =
   { request = FetchUser {userName = userName}
   , shouldRetry = WillRetry
   , session = session
   }
 
-init : Value -> Value -> Effect
+init : Value -> Session -> Effect
 init data session =
   case Decode.decodeValue Event.event data of
     Ok ev ->
@@ -64,7 +65,7 @@ init data session =
       let _ = Debug.log "event error" err in
       errorResponse session "unrecognized event"
 
-stateForEvent : Event.Event -> Value -> State
+stateForEvent : Event.Event -> Session -> State
 stateForEvent event session =
   case event of
     Event.Videos {userId} ->
@@ -86,7 +87,7 @@ type Msg
 type Effect
  = Query State
  | AuthReset State
- | Response Value (Result String Value)
+ | Response Session (Result String Value)
 
 update : Msg -> State -> Effect
 update msg state =
@@ -122,11 +123,11 @@ update msg state =
       Encode.userReply { user = {id = user.id, name = user.displayName } }
         |> sendResponse state.session
 
-errorResponse : Value -> String -> Effect
+errorResponse : Session -> String -> Effect
 errorResponse session reason =
   Response session (Err reason)
 
-sendResponse : Value -> Value -> Effect
+sendResponse : Session -> Value -> Effect
 sendResponse session response =
   Response session (Ok response)
 
