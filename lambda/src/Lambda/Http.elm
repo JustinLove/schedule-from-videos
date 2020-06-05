@@ -1,6 +1,5 @@
 module Lambda.Http exposing
   ( Error(..)
-  , publicError
   , Expect
   , expectJson
   , Request
@@ -23,12 +22,13 @@ type Error
   | NetworkError
   | BadBody Decode.Error
 
-publicError : Port.HttpError -> Error
-publicError error =
-  case error of
-    Port.BadUrl url -> BadUrl url
-    Port.BadStatus status body -> BadStatus status body
-    Port.NetworkError -> NetworkError
+resolve : Port.HttpResponse -> Result Error String
+resolve response =
+  case response of
+    Port.BadUrl url -> Err (BadUrl url)
+    Port.NetworkError -> Err NetworkError
+    Port.BadStatus status body -> Err (BadStatus status body)
+    Port.GoodStatus body -> Ok body
 
 type Expect msg
   = ExpectString (Result Error String -> msg)
@@ -112,15 +112,15 @@ toLambdaRequest id req =
           , id = id
           }
     Nothing ->
-      Task.fail (Port.BadUrl req.url)
-        |> Task.attempt (Port.HttpResponse id)
+      Task.succeed (Port.BadUrl req.url)
+        |> Task.perform (Port.HttpResponse id)
 
-toMsg : RequestId -> Result Port.HttpError String -> HttpModel model appMsg -> (appMsg, HttpModel model appMsg)
-toMsg id result model =
+toMsg : RequestId -> Port.HttpResponse -> HttpModel model appMsg -> (appMsg, HttpModel model appMsg)
+toMsg id response model =
   let
     (expect, m2) = httpMatch id model
-    msg = result
-      |> Result.mapError publicError
+    msg = response
+      |> resolve
       |> decodeResponse expect
   in
     (msg, m2)

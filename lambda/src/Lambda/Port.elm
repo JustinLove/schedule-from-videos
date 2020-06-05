@@ -1,7 +1,7 @@
 port module Lambda.Port exposing
   ( Session
   , Event(..)
-  , HttpError(..)
+  , HttpResponse(..)
   , event
   , decrypt
   , Header
@@ -17,16 +17,17 @@ import Json.Encode as Encode
 
 type alias Session = Value
 
-type HttpError
+type HttpResponse
   = BadUrl String
-  | BadStatus Int String
   | NetworkError
+  | BadStatus Int String
+  | GoodStatus String
 
 type Event
   = SystemError String
   | NewEvent Value Session
   | Decrypted (Result String (List Secret))
-  | HttpResponse Int (Result HttpError String)
+  | HttpResponse Int HttpResponse
 
 event : (Event -> msg) -> Sub msg
 event tagger =
@@ -69,22 +70,20 @@ eventDecoder =
         "httpResponse" ->
           Decode.map2 HttpResponse
             (Decode.field "id" Decode.int)
-            (Decode.map Ok
+            (Decode.map GoodStatus
               (Decode.field "body" Decode.string)
             )
         "badStatus" ->
           Decode.map2 HttpResponse
             (Decode.field "id" Decode.int)
-            (Decode.map Err
-              (Decode.map2 BadStatus
-                (Decode.field "status" Decode.int)
-                (Decode.field "body" Decode.string)
-              )
+            (Decode.map2 BadStatus
+              (Decode.field "status" Decode.int)
+              (Decode.field "body" Decode.string)
             )
         "networkError" ->
           Decode.map2 HttpResponse
             (Decode.field "id" Decode.int)
-            (Decode.succeed (Err NetworkError))
+            (Decode.succeed NetworkError)
         _ -> Decode.fail kind
     )
 
