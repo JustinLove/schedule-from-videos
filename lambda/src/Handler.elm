@@ -114,11 +114,11 @@ stateForEvent : Event.Event -> Lambda.Session -> State
 stateForEvent event session =
   case event of
     Event.Videos {userId} ->
-      State.fetchVideos userId session
+      State.initVideos userId session
     Event.VideosWithName {userId} ->
-      State.fetchVideosWithName userId session
+      State.initVideosWithName userId session
     Event.User {userName} ->
-      State.fetchUser userName session
+      State.initUser userName session
 
 step : Model -> (Model, Effect Msg)
 step model =

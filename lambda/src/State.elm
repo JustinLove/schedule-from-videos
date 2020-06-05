@@ -2,9 +2,9 @@ module State exposing
   ( Retry(..)
   , Request(..)
   , State
-  , fetchVideos
-  , fetchVideosWithName
-  , fetchUser
+  , initVideos
+  , initVideosWithName
+  , initUser
   , Msg(..)
   , Effect(..)
   , update
@@ -33,22 +33,22 @@ type alias State =
   , session : Value
   }
 
-fetchVideos : String -> Value -> State
-fetchVideos userId session =
+initVideos : String -> Value -> State
+initVideos userId session =
   { request = FetchVideos {userId = userId}
   , shouldRetry = WillRetry
   , session = session
   }
 
-fetchVideosWithName : String -> Value -> State
-fetchVideosWithName userId session =
+initVideosWithName : String -> Value -> State
+initVideosWithName userId session =
   { request = FetchVideosAndName {userId = userId}
   , shouldRetry = WillRetry
   , session = session
   }
 
-fetchUser : String -> Value -> State
-fetchUser userName session =
+initUser : String -> Value -> State
+initUser userName session =
   { request = FetchUser {userName = userName}
   , shouldRetry = WillRetry
   , session = session
