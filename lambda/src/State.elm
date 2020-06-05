@@ -2,15 +2,14 @@ module State exposing
   ( Retry(..)
   , Request(..)
   , State
-  , initVideos
-  , initVideosWithName
-  , initUser
+  , init
   , Msg(..)
   , Effect(..)
   , update
   , toHttp
   )
 
+import Event.Decode as Event
 import Lambda.Http as Http
 import Reply.Encode as Encode
 
@@ -56,6 +55,24 @@ initUser userName session =
   , session = session
   }
 
+init : Value -> Value -> Effect
+init data session =
+  case Decode.decodeValue Event.event data of
+    Ok ev ->
+      Query (stateForEvent ev session)
+    Err err ->
+      let _ = Debug.log "event error" err in
+      errorResponse session "unrecognized event"
+
+stateForEvent : Event.Event -> Value -> State
+stateForEvent event session =
+  case event of
+    Event.Videos {userId} ->
+      initVideos userId session
+    Event.VideosWithName {userId} ->
+      initVideosWithName userId session
+    Event.User {userName} ->
+      initUser userName session
 
 type Msg
   = AuthenticationFailed String

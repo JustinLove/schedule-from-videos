@@ -52,12 +52,7 @@ appUpdate : Msg -> Model -> (Model, Effect Msg)
 appUpdate msg model =
   case msg of
     NewEvent data session ->
-      case Decode.decodeValue Event.event data of
-        Ok ev ->
-          appendState (stateForEvent ev session) model
-        Err err ->
-          let _ = Debug.log "event error" err in
-          (model, errorResponse session "unrecognized event")
+      perform (State.init data session) model
     Decrypted (Ok env) ->
       { model | env = env }
         |> step
@@ -71,13 +66,17 @@ appUpdate msg model =
       let _ = Debug.log "unable to fetch token" err in
       withAllRequests (errorResponseState "unable to fetch token") model
     WithState state stateMsg ->
-      case State.update stateMsg state of
-        State.Query newState ->
-          model |> appendState newState
-        State.AuthReset newState ->
-          {model|auth = Nothing} |> appendState newState
-        State.Response session result ->
-          (model, Lambda.Response session result)
+      perform (State.update stateMsg state) model
+
+perform : State.Effect -> Model -> (Model, Effect Msg)
+perform effect model =
+  case effect of
+    State.Query newState ->
+      model |> appendState newState
+    State.AuthReset newState ->
+      {model|auth = Nothing} |> appendState newState
+    State.Response session result ->
+      (model, Lambda.Response session result)
 
 decrypted : Result String (List Secret) -> Msg
 decrypted result =
@@ -96,16 +95,6 @@ decryptToEnv list =
         |> Ok
     _ ->
       Err ("decrypt wrong number of arguments" ++ (List.length list |> String.fromInt))
-
-stateForEvent : Event.Event -> Lambda.Session -> State
-stateForEvent event session =
-  case event of
-    Event.Videos {userId} ->
-      State.initVideos userId session
-    Event.VideosWithName {userId} ->
-      State.initVideosWithName userId session
-    Event.User {userName} ->
-      State.initUser userName session
 
 step : Model -> (Model, Effect Msg)
 step model =
