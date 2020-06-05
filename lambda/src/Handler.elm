@@ -153,19 +153,24 @@ commandFold f a (model, cmd) =
 
 executeRequest : ApiAuth -> State -> Model -> (Model, Effect Msg)
 executeRequest auth state model =
-  (model, requestQuery auth state.request |> Lambda.effectMap (WithState state))
+  ( model
+  , requestQuery state.request
+    |> withAuth auth
+    |> Http.map (WithState state)
+    |> Lambda.HttpRequest
+  )
 
-requestQuery : ApiAuth -> State.Request -> Effect State.Msg
-requestQuery auth request =
+requestQuery : State.Request -> Http.Request State.Msg
+requestQuery request =
   case request of
     FetchVideos {userId} ->
-      fetchVideos auth userId
+      fetchVideos userId
     FetchVideosAndName {userId} ->
-      fetchUserById auth userId
+      fetchUserById userId
     FetchVideosWithName user ->
-      fetchVideosWithName auth user
+      fetchVideosWithName user
     FetchUser {userName} ->
-      fetchUserByName auth userName
+      fetchUserByName userName
 
 errorResponse : Lambda.Session -> String -> Effect Msg
 errorResponse session reason =
@@ -178,9 +183,6 @@ errorResponseState reason state model =
 sendResponse : Lambda.Session -> Value -> Effect Msg
 sendResponse session response =
   Lambda.Response session (Ok response)
-
-httpRequest : Http.Request msg -> Effect msg
-httpRequest = Lambda.HttpRequest
 
 standardHeaders =
   [ Port.header "User-Agent" "Schedule From Videos Lambda"
@@ -202,6 +204,10 @@ twitchHeaders clientId token =
   , Port.header "Authorization" ("Bearer "++token)
   ]
 
+withAuth : ApiAuth -> Http.Request msg -> Http.Request msg
+withAuth auth request =
+  { request | headers = oauthHeaders auth }
+
 tokenUrl : Env.PlainEnv -> String
 tokenUrl {clientId, clientSecret} =
   "https://id.twitch.tv/oauth2/token"
@@ -211,7 +217,7 @@ tokenUrl {clientId, clientSecret} =
 
 fetchToken : Env.PlainEnv -> Effect Msg
 fetchToken env =
-  httpRequest
+  Lambda.HttpRequest
     { url = tokenUrl env
     , method = "POST"
     , headers = standardHeaders
@@ -227,23 +233,21 @@ videosUrl : String -> String
 videosUrl userId =
   "https://api.twitch.tv/helix/videos?first=100&type=archive&user_id=" ++ userId
 
-fetchVideos : ApiAuth -> String -> Effect State.Msg
-fetchVideos auth userId =
-  httpRequest
-    { url = videosUrl userId
-    , method = "GET"
-    , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse "fetchVideos" State.GotVideos) decodeVideos
-    }
+fetchVideos : String -> Http.Request State.Msg
+fetchVideos userId =
+  { url = videosUrl userId
+  , method = "GET"
+  , headers = []
+  , expect = Http.expectJson (httpResponse "fetchVideos" State.GotVideos) decodeVideos
+  }
 
-fetchVideosWithName : ApiAuth -> {userId : String, userName: String} -> Effect State.Msg
-fetchVideosWithName auth user =
-  httpRequest
-    { url = videosUrl user.userId
-    , method = "GET"
-    , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse "fetchVideos" (State.GotVideosWithName user)) decodeVideos
-    }
+fetchVideosWithName : {userId : String, userName: String} -> Http.Request State.Msg
+fetchVideosWithName user =
+  { url = videosUrl user.userId
+  , method = "GET"
+  , headers = []
+  , expect = Http.expectJson (httpResponse "fetchVideos" (State.GotVideosWithName user)) decodeVideos
+  }
 
 decodeVideos : Decode.Decoder (List Helix.Video)
 decodeVideos =
@@ -254,24 +258,22 @@ fetchUserByIdUrl : String -> String
 fetchUserByIdUrl userId =
   "https://api.twitch.tv/helix/users?id=" ++ userId
 
-fetchUserById : ApiAuth -> String -> Effect State.Msg
-fetchUserById auth userId =
-  httpRequest
-    { url =  fetchUserByIdUrl userId
-    , method = "GET"
-    , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse "fetchUserById" (validateUser State.GotUserById)) Helix.users
-    }
+fetchUserById : String -> Http.Request State.Msg
+fetchUserById userId =
+  { url =  fetchUserByIdUrl userId
+  , method = "GET"
+  , headers = []
+  , expect = Http.expectJson (httpResponse "fetchUserById" (validateUser State.GotUserById)) Helix.users
+  }
 
 fetchUserByNameUrl : String -> String
 fetchUserByNameUrl login =
   "https://api.twitch.tv/helix/users?login=" ++ login
 
-fetchUserByName : ApiAuth -> String -> Effect State.Msg
-fetchUserByName auth login =
-  httpRequest
-    { url =  fetchUserByNameUrl login
-    , method = "GET"
-    , headers = oauthHeaders auth
-    , expect = Http.expectJson (httpResponse "fetchUserByName" (validateUser State.GotUserByName)) Helix.users
-    }
+fetchUserByName : String -> Http.Request State.Msg
+fetchUserByName login =
+  { url =  fetchUserByNameUrl login
+  , method = "GET"
+  , headers = []
+  , expect = Http.expectJson (httpResponse "fetchUserByName" (validateUser State.GotUserByName)) Helix.users
+  }
