@@ -35,7 +35,7 @@ type Effect msg
   | HttpRequest (Http.Request msg)
   | Response Session (Result String Value)
 
-perform : (Model model appMsg, Effect appMsg) -> (Model model appMsg, Cmd msg)
+perform : (Model model appMsg, Effect appMsg) -> (Model model appMsg, Cmd LambdaMsg)
 perform (model, effect) =
   case effect of
     NoEffect -> (model, Cmd.none)

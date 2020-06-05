@@ -204,12 +204,9 @@ twitchHeaders clientId token =
   , Port.header "Authorization" ("Bearer "++token)
   ]
 
---tokenHostname = "localhost"
-tokenHostname = "id.twitch.tv"
-
-tokenPath : Env.PlainEnv -> String
-tokenPath {clientId, clientSecret} =
-  "/oauth2/token"
+tokenUrl : Env.PlainEnv -> String
+tokenUrl {clientId, clientSecret} =
+  "https://id.twitch.tv/oauth2/token"
     ++ "?client_id=" ++ (Secret.toString clientId)
     ++ "&client_secret=" ++ (Secret.toString clientSecret)
     ++ "&grant_type=client_credentials"
@@ -217,8 +214,7 @@ tokenPath {clientId, clientSecret} =
 fetchToken : Env.PlainEnv -> Effect Msg
 fetchToken env =
   httpRequest
-    { hostname = tokenHostname
-    , path = tokenPath env
+    { url = tokenUrl env
     , method = "POST"
     , headers = standardHeaders
     , expect = Http.expectJson GotToken decodeToken
@@ -229,17 +225,14 @@ decodeToken =
   Id.appOAuth
     |> Decode.map (.accessToken>>Secret.fromString)
 
-helixHostname = "api.twitch.tv"
-
-videosPath : String -> String
-videosPath userId =
-  "/helix/videos?first=100&type=archive&user_id=" ++ userId
+videosUrl : String -> String
+videosUrl userId =
+  "https://api.twitch.tv/helix/videos?first=100&type=archive&user_id=" ++ userId
 
 fetchVideos : ApiAuth -> String -> State -> Effect Msg
 fetchVideos auth userId state =
   httpRequest
-    { hostname = helixHostname
-    , path = videosPath userId
+    { url = videosUrl userId
     , method = "GET"
     , headers = oauthHeaders auth
     , expect = Http.expectJson (httpResponse state "fetchVideos" State.GotVideos) decodeVideos
@@ -248,8 +241,7 @@ fetchVideos auth userId state =
 fetchVideosWithName : ApiAuth -> {userId : String, userName: String} -> State -> Effect Msg
 fetchVideosWithName auth user state =
   httpRequest
-    { hostname = helixHostname
-    , path = videosPath user.userId
+    { url = videosUrl user.userId
     , method = "GET"
     , headers = oauthHeaders auth
     , expect = Http.expectJson (httpResponse state "fetchVideos" (State.GotVideosWithName user)) decodeVideos
@@ -260,29 +252,27 @@ decodeVideos =
   Helix.videos
     |> Decode.map (List.filter (\v -> v.videoType == Helix.Archive))
 
-fetchUserByIdPath : String -> String
-fetchUserByIdPath userId =
-  "/helix/users?id=" ++ userId
+fetchUserByIdUrl : String -> String
+fetchUserByIdUrl userId =
+  "https://api.twitch.tv/helix/users?id=" ++ userId
 
 fetchUserById : ApiAuth -> String -> State -> Effect Msg
 fetchUserById auth userId state =
   httpRequest
-    { hostname = helixHostname
-    , path =  fetchUserByIdPath userId
+    { url =  fetchUserByIdUrl userId
     , method = "GET"
     , headers = oauthHeaders auth
     , expect = Http.expectJson (httpResponse state "fetchUserById" (validateUser State.GotUserById)) Helix.users
     }
 
-fetchUserByNamePath : String -> String
-fetchUserByNamePath login =
-  "/helix/users?login=" ++ login
+fetchUserByNameUrl : String -> String
+fetchUserByNameUrl login =
+  "https://api.twitch.tv/helix/users?login=" ++ login
 
 fetchUserByName : ApiAuth -> String -> State -> Effect Msg
 fetchUserByName auth login state =
   httpRequest
-    { hostname = helixHostname
-    , path =  fetchUserByNamePath login
+    { url =  fetchUserByNameUrl login
     , method = "GET"
     , headers = oauthHeaders auth
     , expect = Http.expectJson (httpResponse state "fetchUserByName" (validateUser State.GotUserByName)) Helix.users

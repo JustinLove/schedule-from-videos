@@ -18,7 +18,8 @@ import Json.Encode as Encode
 type alias Session = Value
 
 type HttpError
-  = BadStatus Int String
+  = BadUrl String
+  | BadStatus Int String
   | NetworkError
 
 type Event

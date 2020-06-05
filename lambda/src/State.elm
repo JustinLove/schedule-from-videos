@@ -68,7 +68,7 @@ type Effect
 
 update : Msg -> State -> Effect
 update msg state =
-  case msg of
+  case Debug.log "state msg" msg of
     AuthenticationFailed source ->
       let _ = Debug.log "auth failed " source in
       if state.shouldRetry == WillRetry then

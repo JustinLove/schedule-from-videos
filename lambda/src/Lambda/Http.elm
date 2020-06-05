@@ -14,15 +14,19 @@ import Lambda.Port as Port
 
 import Dict exposing (Dict)
 import Json.Decode as Decode
+import Task
+import Url
 
 type Error
-  = BadStatus Int String
+  = BadUrl String
+  | BadStatus Int String
   | NetworkError
   | BadBody Decode.Error
 
 publicError : Port.HttpError -> Error
 publicError error =
   case error of
+    Port.BadUrl url -> BadUrl url
     Port.BadStatus status body -> BadStatus status body
     Port.NetworkError -> NetworkError
 
@@ -47,8 +51,7 @@ decodeResponse expect response =
       decodeTagger response
 
 type alias Request msg =
-  { hostname : String
-  , path : String
+  { url : String
   , method : String
   , headers : List Port.Header
   , expect : Expect msg
@@ -56,8 +59,7 @@ type alias Request msg =
 
 requestMap : (a -> b) -> Request a -> Request b
 requestMap f req =
-  { hostname = req.hostname
-  , path = req.path
+  { url = req.url
   , method = req.method
   , headers = req.headers
   , expect = expectMap f req.expect
@@ -81,7 +83,7 @@ httpMatch id model =
     Nothing ->
       Debug.todo "response to unknown request"
 
-rememberHttpRequest : Request appMsg -> HttpModel model appMsg -> (HttpModel model appMsg, Cmd msg)
+rememberHttpRequest : Request appMsg -> HttpModel model appMsg -> (HttpModel model appMsg, Cmd Port.Event)
 rememberHttpRequest req model =
   let
     id = model.nextRequestId + 1
@@ -93,15 +95,25 @@ rememberHttpRequest req model =
   , toLambdaRequest id req
   )
 
-toLambdaRequest : RequestId -> Request appMsg -> Cmd msg
+toLambdaRequest : RequestId -> Request appMsg -> Cmd Port.Event
 toLambdaRequest id req =
-  Port.httpRequest
-    { hostname = req.hostname
-    , path = req.path
-    , method = req.method
-    , headers = req.headers
-    , id = id
-    }
+  case Url.fromString req.url of
+    Just url ->
+      let
+        query = url.query
+          |> Maybe.map (\q -> "?" ++ q)
+          |> Maybe.withDefault ""
+      in
+        Port.httpRequest
+          { hostname = url.host
+          , path = url.path ++ query
+          , method = req.method
+          , headers = req.headers
+          , id = id
+          }
+    Nothing ->
+      Task.fail (Port.BadUrl req.url)
+        |> Task.attempt (Port.HttpResponse id)
 
 toMsg : RequestId -> Result Port.HttpError String -> HttpModel model appMsg -> (appMsg, HttpModel model appMsg)
 toMsg id result model =
