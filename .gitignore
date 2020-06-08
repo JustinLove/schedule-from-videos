@@ -3,6 +3,7 @@ src/TwitchId.elm
 src/Backend.elm
 public/schedule-from-videos.js
 public/config/config.js
+public/Schedule From Videos.json
 lambda/.env
 lambda/handler.js
 lambda/node_modules
