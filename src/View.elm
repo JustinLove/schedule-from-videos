@@ -105,12 +105,12 @@ view model =
             Data _ -> text ""
             Unknown -> text ""
             NotFound -> text "Channel name not found."
-            RequestFailed -> text "Twitch API request failed."
+            RequestFailed -> text "User lookup failed."
           , case model.userId of
             Data _ -> text ""
             Unknown -> text ""
             NotFound -> text "Channel ID not found."
-            RequestFailed -> text "Twitch API request failed."
+            RequestFailed -> text "User lookup failed."
           ]
       Extension ->
         h2 [] [ text "Historical Schedule" ]
@@ -126,8 +126,8 @@ view model =
           ]
       RequestFailed ->
         div [ class "error-message" ]
-          [ h2 [] [ text "Video Request Failed" ]
-          , p [] [ text "Twitch API request failed." ]
+          [ h2 [] [ text "Unable to retrieve video history" ]
+          , p [] [ text "Backend request failed." ]
           ]
     , displayFooter model.mode
     ]
