@@ -2,7 +2,6 @@ module Config exposing (..)
 
 import Config.View as View
 import TwitchExt
-import TwitchId
 
 import Browser
 import Browser.Navigation as Navigation
@@ -18,7 +17,6 @@ type Msg
 type alias Model =
   { location : Url
   , navigationKey : Navigation.Key
-  , clientId : String
   , userId : Maybe String
   , theme : String
   }
@@ -36,7 +34,6 @@ init : () -> Url -> Navigation.Key -> (Model, Cmd Msg)
 init flags location key =
   ( { location = location
     , navigationKey = key
-    , clientId = TwitchId.clientId
     , userId = Nothing
     , theme = "dark"
     }
@@ -57,8 +54,7 @@ update msg model =
       case String.toInt auth.channelId of
         Just _ ->
           ( { model
-            | clientId = auth.clientId
-            , userId = Just auth.channelId
+            | userId = Just auth.channelId
             }
           , Cmd.none
           )
