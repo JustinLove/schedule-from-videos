@@ -1,8 +1,8 @@
 - working plan: aws lambda, node
   - x extension rig
   - x cors
-  - update error message - not necessarily twitch error
-  - cdn
+  - x update error message - not necessarily twitch error
+  - x cdn
   - turn down logging after approval
 - https://obsproject.com/tools/browser-drag-and-drop
 - move day labels depending on data location?
@@ -16,6 +16,7 @@
 
 - window size not received on first load in iframe (twitch dev rig)
 - exceptions (from elm?) on first load in iframe
+  - svg polyfill inserted an svg tag, throwing of elm virtual dom. Only needed for IE 9
 
 - window size lag
 
