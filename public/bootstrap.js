@@ -15,7 +15,7 @@ function tryToGetValidCanvas(time) {
     //console.log(e)
     canvas = null
     context = null
-    console.log("canvas exception, trying again in", time)
+    //console.log("canvas exception, trying again in", time)
     setTimeout(tryToGetValidCanvas, time, time*2)
   }
 }
