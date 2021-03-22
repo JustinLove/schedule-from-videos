@@ -9,11 +9,10 @@ module State exposing
   , toHttp
   )
 
+import Decode as Decode
 import Event.Decode as Event
 import Lambda.Http as Http
 import Reply.Encode as Encode
-
-import Twitch.Helix.Decode as Helix
 
 import Json.Decode as Decode exposing (Value)
 
@@ -79,10 +78,10 @@ type Msg
   = AuthenticationFailed String
   | HttpError String Http.Error
   | UserNotFound
-  | GotVideos (List Helix.Video)
-  | GotVideosWithName {userId : String, userName: String} (List Helix.Video)
-  | GotUserById Helix.User
-  | GotUserByName Helix.User
+  | GotVideos (List Decode.Event)
+  | GotVideosWithName {userId : String, userName: String} (List Decode.Event)
+  | GotUserById Decode.User
+  | GotUserByName Decode.User
 
 type Effect
  = Query State
@@ -138,7 +137,7 @@ httpResponse source success result =
     Err (Http.BadStatus 401 body) -> AuthenticationFailed source
     Err err -> HttpError source err
 
-validateUser : (Helix.User -> Msg) -> (List Helix.User) -> Msg
+validateUser : (Decode.User -> Msg) -> (List Decode.User) -> Msg
 validateUser success users =
   case users of
     user :: _ -> success user
@@ -165,7 +164,7 @@ fetchVideos userId =
   { url = videosUrl userId
   , method = "GET"
   , headers = []
-  , expect = Http.expectJson (httpResponse "fetchVideos" GotVideos) decodeVideos
+  , expect = Http.expectJson (httpResponse "fetchVideos" GotVideos) Decode.events
   }
 
 fetchVideosWithName : {userId : String, userName: String} -> Http.Request Msg
@@ -173,13 +172,8 @@ fetchVideosWithName user =
   { url = videosUrl user.userId
   , method = "GET"
   , headers = []
-  , expect = Http.expectJson (httpResponse "fetchVideos" (GotVideosWithName user)) decodeVideos
+  , expect = Http.expectJson (httpResponse "fetchVideos" (GotVideosWithName user)) Decode.events
   }
-
-decodeVideos : Decode.Decoder (List Helix.Video)
-decodeVideos =
-  Helix.videos
-    |> Decode.map (List.filter (\v -> v.videoType == Helix.Archive))
 
 fetchUserByIdUrl : String -> String
 fetchUserByIdUrl userId =
@@ -190,7 +184,7 @@ fetchUserById userId =
   { url =  fetchUserByIdUrl userId
   , method = "GET"
   , headers = []
-  , expect = Http.expectJson (httpResponse "fetchUserById" (validateUser GotUserById)) Helix.users
+  , expect = Http.expectJson (httpResponse "fetchUserById" (validateUser GotUserById)) Decode.users
   }
 
 fetchUserByNameUrl : String -> String
@@ -202,5 +196,5 @@ fetchUserByName login =
   { url =  fetchUserByNameUrl login
   , method = "GET"
   , headers = []
-  , expect = Http.expectJson (httpResponse "fetchUserByName" (validateUser GotUserByName)) Helix.users
+  , expect = Http.expectJson (httpResponse "fetchUserByName" (validateUser GotUserByName)) Decode.users
   }

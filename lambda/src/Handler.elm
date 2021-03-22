@@ -7,7 +7,7 @@ import Lambda.Http as Http
 import Secret exposing (Secret)
 import State exposing (State)
 
-import Twitch.Id.Decode as Id
+import Twitch.Id.OAuth as OAuth
 
 import Json.Decode as Decode exposing (Value)
 
@@ -185,6 +185,5 @@ fetchToken env =
 
 decodeToken : Decode.Decoder Secret
 decodeToken =
-  Id.appOAuth
-    |> Decode.map (.accessToken>>Secret.fromString)
-
+  OAuth.accessToken
+    |> Decode.map Secret.fromString

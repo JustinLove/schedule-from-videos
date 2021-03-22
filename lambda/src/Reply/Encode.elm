@@ -1,11 +1,11 @@
 module Reply.Encode exposing (videosReply, videosWithNameReply, userReply)
 
-import Twitch.Helix.Decode as Helix exposing (Video)
+import Decode exposing (Event)
 
 import Json.Encode exposing (..)
 import Time
 
-videosReply : {events : List Video} -> Value
+videosReply : {events : List Event} -> Value
 videosReply {events} =
   object
     [ ("events", videos events)
@@ -13,7 +13,7 @@ videosReply {events} =
 
 videosWithNameReply :
   { user : { id : String, name : String }
-  , events : List Video
+  , events : List Event
   } -> Value
 videosWithNameReply {user, events} =
   object
@@ -27,10 +27,10 @@ userReply {user} =
     [ ("user", encodeUser user.id user.name)
     ]
 
-videos : List Video -> Value
+videos : List Event -> Value
 videos = list video
 
-video : Video -> Value
+video : Event -> Value
 video v =
   object
     [ ("created_at", v.createdAt |> Time.posixToMillis |> int)
