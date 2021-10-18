@@ -1,10 +1,14 @@
-port module TwitchExt exposing (..)
+port module TwitchExt exposing (Auth, Context, onAuthorized, onContext, log)
 
-import Json.Decode exposing (..)
+import Json.Decode as Decode
+import Json.Encode as Encode
+import Http
 
 port onAuthorized : (Auth -> msg) -> Sub msg
 port onContext : (Context -> msg) -> Sub msg
-port onError : (Json.Decode.Value -> msg) -> Sub msg
+port onError : (Decode.Value -> msg) -> Sub msg
+
+port logCommand : Decode.Value -> Cmd msg
 
 type alias Auth =
   { channelId : String
@@ -13,21 +17,64 @@ type alias Auth =
   , userId : String
   }
 
-auth : Decoder Auth
+auth : Decode.Decoder Auth
 auth =
-  map4 Auth
-    (field "channelId" string)
-    (field "clientId" string)
-    (field "token" string)
-    (field "userId" string)
+  Decode.map4 Auth
+    (Decode.field "channelId" Decode.string)
+    (Decode.field "clientId" Decode.string)
+    (Decode.field "token" Decode.string)
+    (Decode.field "userId" Decode.string)
 
 type alias Context =
   { theme : String
-  , mode : String
   }
 
-context : Decoder Context
+context : Decode.Decoder Context
 context =
-  map2 Context
-    (field "theme" string)
-    (field "mode" string)
+  Decode.map Context
+    (Decode.field "theme" Decode.string)
+
+decodeError : String -> Decode.Error -> Cmd msg
+decodeError note err =
+  err
+    |> Decode.errorToString
+    |> Encode.string
+    |> log note
+
+httpError : String -> Http.Error -> Cmd msg
+httpError note err =
+  (case err of
+    Http.BadUrl url ->
+      Encode.object
+        [ ("error", Encode.string "BadUrl")
+        , ("url", Encode.string url)
+        ]
+    Http.Timeout ->
+      Encode.object
+        [ ("error", Encode.string "Timeout")
+        ]
+    Http.NetworkError ->
+      Encode.object
+        [ ("error", Encode.string "NetworkError")
+        ]
+    Http.BadStatus status ->
+      Encode.object
+        [ ("error", Encode.string "BadStatus")
+        , ("status", Encode.int status)
+        ]
+    Http.BadBody message ->
+      Encode.object
+        [ ("error", Encode.string "BadBody")
+        , ("message", Encode.string message)
+        ]
+  )
+    |> log note
+
+log : String -> Encode.Value -> Cmd msg
+log note value =
+  Encode.object
+    [ ("kind", Encode.string "log")
+    , ("note", Encode.string note)
+    , ("value", value)
+    ]
+    |> logCommand

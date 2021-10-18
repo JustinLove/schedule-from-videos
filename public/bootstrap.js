@@ -51,3 +51,20 @@ if (window.Twitch && window.Twitch.ext) {
     app.ports.onError.send(err)
   });
 }
+
+if (app.ports.logCommand) {
+  app.ports.logCommand.subscribe(function(message) {
+    switch(message.kind) {
+      case 'log':
+        if (window.Twitch && window.Twitch.ext) {
+          window.Twitch.ext.rig.log(message.note, message.value)
+        } else {
+          console.log(message.note, message.value)
+        }
+        break
+      default:
+        console.log('unknown message', message)
+        break;
+    }
+  })
+}
