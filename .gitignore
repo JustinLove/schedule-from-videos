@@ -1,4 +1,5 @@
 elm-stuff
+releases
 src/TwitchId.elm
 src/Backend.elm
 public/schedule-from-videos.js
