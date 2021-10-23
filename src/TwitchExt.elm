@@ -14,15 +14,17 @@ type alias Auth =
   { channelId : String
   , clientId : String
   , token : String
+  , helixToken : String
   , userId : String
   }
 
 auth : Decode.Decoder Auth
 auth =
-  Decode.map4 Auth
+  Decode.map5 Auth
     (Decode.field "channelId" Decode.string)
     (Decode.field "clientId" Decode.string)
     (Decode.field "token" Decode.string)
+    (Decode.field "helixToken" Decode.string)
     (Decode.field "userId" Decode.string)
 
 type alias Context =

@@ -92,10 +92,10 @@ init flags location key =
       |> Cmd.batch
     , case muserId of
         Just id ->
-          fetchVideosWithName id
+          backendVideosWithName id
         Nothing ->
           case mlogin of
-            Just login -> fetchUserByName login
+            Just login -> backendUserByName login
             Nothing -> Cmd.none
     ]
   )
@@ -108,7 +108,7 @@ update msg model =
         , userId = Data user.id
         }
       , Cmd.batch
-        [ fetchVideos user.id
+        [ backendVideos user.id
         , if (Data user.id) /= model.userId then
             Navigation.pushUrl model.navigationKey (model.location.path ++ "?userId="  ++ user.id)
           else
@@ -161,7 +161,10 @@ update msg model =
           ( { model
             | userId = Data auth.channelId
             }
-          , fetchVideos auth.channelId
+          , if auth.helixToken == "" then
+              backendVideos auth.channelId
+            else
+              helixVideos auth.clientId auth.helixToken auth.channelId
           )
         Nothing ->
           (model, Cmd.none)
@@ -169,7 +172,7 @@ update msg model =
       ( { model | theme = context.theme }, Cmd.none )
     UI (View.SetUsername username) ->
       ( { model |events = Unknown }
-      , fetchUserByName username)
+      , backendUserByName username)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -181,36 +184,58 @@ subscriptions model =
     , MeasureText.textSize TextSize
     ]
 
-fetchUserByNameUrl : String -> String
-fetchUserByNameUrl login =
+backendUserByNameUrl : String -> String
+backendUserByNameUrl login =
   Backend.url ++ "/user/" ++ login
 
-fetchUserByName : String -> Cmd Msg
-fetchUserByName login =
+backendUserByName : String -> Cmd Msg
+backendUserByName login =
   Http.get
-    { url = (fetchUserByNameUrl login)
+    { url = (backendUserByNameUrl login)
     , expect = Http.expectJson UserForName Decode.user
     }
 
-fetchVideosUrl : String -> String
-fetchVideosUrl userId =
+backendVideosUrl : String -> String
+backendVideosUrl userId =
   Backend.url ++ "/videos/" ++ userId
 
-fetchVideos : String -> Cmd Msg
-fetchVideos userId =
+backendVideos : String -> Cmd Msg
+backendVideos userId =
   Http.get
-    { url = (fetchVideosUrl userId)
+    { url = (backendVideosUrl userId)
     , expect = Http.expectJson Videos Decode.videos
     }
 
-fetchVideosWithNameUrl : String -> String
-fetchVideosWithNameUrl userId =
+helixVideosUrl : String -> String
+helixVideosUrl userId =
+  "https://api.twitch.tv/helix/videos?first=100&type=archive&user_id=" ++ userId
+
+helixVideos : String -> String -> String -> Cmd Msg
+helixVideos clientId auth userId =
+  Http.request
+    { method = "GET"
+    , headers = twitchHeaders clientId auth
+    , url = (helixVideosUrl userId)
+    , body = Http.emptyBody
+    , expect = Http.expectJson Videos Decode.helixVideos
+    , timeout = Nothing
+    , tracker = Nothing
+    }
+
+twitchHeaders : String -> String -> List Http.Header
+twitchHeaders clientId token =
+  [ Http.header "Client-ID" clientId
+  , Http.header "Authorization" ("Extension "++token)
+  ]
+
+backendVideosWithNameUrl : String -> String
+backendVideosWithNameUrl userId =
   Backend.url ++ "/videoswithname/" ++ userId
 
-fetchVideosWithName : String -> Cmd Msg
-fetchVideosWithName userId =
+backendVideosWithName : String -> Cmd Msg
+backendVideosWithName userId =
   Http.get
-    { url = (fetchVideosWithNameUrl userId)
+    { url = (backendVideosWithNameUrl userId)
     , expect = Http.expectJson VideosWithName Decode.videosWithName
     }
 

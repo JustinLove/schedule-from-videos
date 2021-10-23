@@ -1,8 +1,7 @@
+- csp: https://discuss.dev.twitch.tv/t/new-extensions-policy-for-content-security-policy-csp-directives-and-timeline-for-enforcement/33695
+- api: https://dev.twitch.tv/docs/extensions/frontend-api-usage
+  - may need api.twitch.tv in csp
 - working plan: aws lambda, node
-  - x extension rig
-  - x cors
-  - x update error message - not necessarily twitch error
-  - x cdn
   - turn down logging after approval
 - https://obsproject.com/tools/browser-drag-and-drop
 - move day labels depending on data location?
@@ -25,6 +24,11 @@
 - timezones?
 
 https://wondible.com/schedule-from-videos/
+
+Twitch Dev Rig:
+- Agressive caching, need to enable disable-cache in rig
+- context.mode is only sent on first context call
+- helixToken missing https://github.com/twitchdev/issues/issues/471
 
 aws lambda add-permission   --function-name "arn:aws:lambda:us-east-1:731826986597:function:sfv_user_videos:ALIAS_NAME_HERE"   --source-arn "arn:aws:execute-api:us-east-1:731826986597:nwsj6y4eah/*/GET/user/*"   --principal apigateway.amazonaws.com   --statement-id 6bde4914-234a-46b0-889e-8ce508bbda4c   --action lambda:InvokeFunction
 

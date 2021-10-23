@@ -37,6 +37,7 @@ tryToGetValidCanvas(16)
 if (window.Twitch && window.Twitch.ext) {
   window.Twitch.ext.onAuthorized(function onAuthorized(auth) {
     //console.log('auth', auth);
+    auth.helixToken = auth.helixToken || '' // not available in rig, and reported missing on mobile
     app.ports.onAuthorized.send(auth)
   });
 
