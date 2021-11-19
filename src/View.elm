@@ -170,26 +170,26 @@ displayGraph model events =
 
 displayFooter : Mode -> Html msg
 displayFooter mode =
+  case mode of
+    Page -> pageFooter
+    Extension -> extensionFooter
+
+pageFooter : Html msg
+pageFooter =
   footer []
-  [ case mode of
-    Page ->
-      a
-        [ href "https://github.com/JustinLove/schedule-from-videos"
-        , target "_blank"
-        , rel "noopener"
-        ]
-        [ icon "github", text "schedule-from-videos" ]
-    Extension -> text ""
+  [ a
+      [ href "https://github.com/JustinLove/schedule-from-videos"
+      , target "_blank"
+      , rel "noopener"
+      ]
+      [ icon "github", text "schedule-from-videos" ]
   , text " "
-  , case mode of
-    Page ->
-      a
-        [ href "https://twitter.com/wondible"
-        , target "_blank"
-        , rel "noopener"
-        ]
-        [ icon "twitter", text "@wondible" ]
-    Extension -> text ""
+  , a
+      [ href "https://twitter.com/wondible"
+      , target "_blank"
+      , rel "noopener"
+      ]
+      [ icon "twitter", text "@wondible" ]
   , text " "
   , a
     [ href "https://twitch.tv/wondible"
@@ -197,6 +197,17 @@ displayFooter mode =
     , rel "noopener"
     ]
     [ icon "twitch", text "wondible" ]
+  ]
+
+extensionFooter : Html msg
+extensionFooter =
+  footer []
+  [ a
+    [ href "https://twitch.tv/wondible"
+    , target "_blank"
+    , rel "noopener"
+    ]
+    [ text "wondible" ]
   ]
 
 icon : String -> Html msg

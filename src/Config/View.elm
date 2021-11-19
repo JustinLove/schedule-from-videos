@@ -84,7 +84,7 @@ displayFooter =
       , target "_blank"
       , rel "noopener"
       ]
-      [ icon "twitch", text "wondible" ]
+      [ text "wondible" ]
     ]
 
 icon : String -> Html msg
